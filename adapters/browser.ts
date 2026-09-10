@@ -53,7 +53,7 @@ async function playRingtone(settings: Settings) {
     const gain = context.createGain();
     gain.connect(context.destination);
     gain.gain.setValueAtTime(0.001, start);
-    gain.gain.exponentialRampToValueAtTime(0.06, start + 0.015);
+    gain.gain.exponentialRampToValueAtTime(chosen.volume, start + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.001, start + chosen.length);
     const tone = context.createOscillator();
     tone.type = chosen.wave;

@@ -48,7 +48,16 @@ const schema = z.object({
     timezone,
     sound: z.boolean(),
     ringtone: z
-      .enum(["classic", "woodland", "raindrop", "sunrise", "custom"])
+      .enum([
+        "classic",
+        "woodland",
+        "raindrop",
+        "sunrise",
+        "bright-bell",
+        "morning-call",
+        "focus-alarm",
+        "custom",
+      ])
       .default("classic"),
     customRingtone,
     notifications: z.boolean(),

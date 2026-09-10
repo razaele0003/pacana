@@ -53,6 +53,9 @@ test("ringtone preferences preserve old journals and round-trip through backup",
     "woodland",
     "raindrop",
     "sunrise",
+    "bright-bell",
+    "morning-call",
+    "focus-alarm",
   ] as const) {
     const s = defaults();
     s.settings.ringtone = ringtone;

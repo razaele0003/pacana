@@ -8,6 +8,7 @@ export const ringtones = [
     step: 0.18,
     length: 0.6,
     wave: "sine",
+    volume: 0.07,
   },
   {
     id: "woodland",
@@ -16,6 +17,7 @@ export const ringtones = [
     step: 0.22,
     length: 0.8,
     wave: "sine",
+    volume: 0.08,
   },
   {
     id: "raindrop",
@@ -24,6 +26,7 @@ export const ringtones = [
     step: 0.16,
     length: 0.35,
     wave: "sine",
+    volume: 0.08,
   },
   {
     id: "sunrise",
@@ -32,6 +35,34 @@ export const ringtones = [
     step: 0.25,
     length: 0.7,
     wave: "triangle",
+    volume: 0.09,
+  },
+  {
+    id: "bright-bell",
+    name: "Bright bell · loud",
+    notes: [880, 1174.66, 1567.98, 1174.66],
+    step: 0.2,
+    length: 0.72,
+    wave: "sine",
+    volume: 0.18,
+  },
+  {
+    id: "morning-call",
+    name: "Morning call · loud",
+    notes: [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5],
+    step: 0.16,
+    length: 0.52,
+    wave: "triangle",
+    volume: 0.2,
+  },
+  {
+    id: "focus-alarm",
+    name: "Focus alarm · loud",
+    notes: [740, 740, 932.33, 932.33, 1174.66, 1174.66],
+    step: 0.14,
+    length: 0.38,
+    wave: "sawtooth",
+    volume: 0.16,
   },
 ] as const;
 export type Ringtone = (typeof ringtones)[number]["id"] | "custom";
