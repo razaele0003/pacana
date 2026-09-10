@@ -13,6 +13,10 @@ import {
   remaining,
   nextPhase,
   changeTimezone,
+  clearDay,
+  deleteCheckpoint,
+  deleteSession,
+  resetProgress,
 } from "../core/engine";
 import { nextClock, localInstant } from "../core/schedule";
 import { parseBackup } from "../data/backup";
@@ -59,6 +63,59 @@ test("ringtone preferences preserve old journals and round-trip through backup",
   }
   old.settings.ringtone = "invalid";
   assert.throws(() => parseBackup(old));
+});
+test("custom ringtones validate and preserve through backup", () => {
+  const state = defaults();
+  state.settings.ringtone = "custom";
+  state.settings.customRingtone = "data:audio/mpeg;base64,AA==";
+  assert.equal(parseBackup(structuredClone(state)).settings.ringtone, "custom");
+  state.settings.customRingtone = "data:text/plain;base64,AA==";
+  assert.throws(() => parseBackup(state));
+});
+test("deleting records and clearing a journal day preserves focus progress", () => {
+  const state = defaults("UTC");
+  state.sessions.push({
+    id: "session",
+    startedAt: 0,
+    endedAt: 60_000,
+    duration: 60_000,
+    status: "completed",
+    task: "",
+    category: "Study",
+    note: "",
+  });
+  state.checkpoints.push({
+    id: "checkpoint",
+    runId: "run",
+    start: 0,
+    end: 60_000,
+    status: "logged",
+    activity: "Read",
+    category: "Study",
+    mood: "",
+    loggedAt: 60_001,
+  });
+  state.rewards = { "focus:session": 1, "check:checkpoint": 5 };
+  deleteSession(state, "session");
+  assert.equal(totalXP(state), 5);
+  deleteCheckpoint(state, "checkpoint");
+  assert.equal(totalXP(state), 0);
+  state.sessions.push({
+    id: "today",
+    startedAt: 0,
+    endedAt: 60_000,
+    duration: 60_000,
+    status: "completed",
+    task: "",
+    category: "Study",
+    note: "",
+  });
+  state.rewards["focus:today"] = 1;
+  clearDay(state, "1970-01-01", "UTC");
+  assert.equal(state.sessions.length, 1);
+  assert.equal(totalXP(state), 1);
+  resetProgress(state);
+  assert.deepEqual(state.rewards, {});
 });
 import "fake-indexeddb/auto";
 import { transact, restore } from "../data/store";
@@ -286,7 +343,7 @@ test("notification denial and unsupported browsers retain the in-app fallback", 
     await assert.rejects(enableNotifications(), /not enabled/);
     const settings = defaults().settings;
     settings.notifications = true;
-    assert.doesNotThrow(() => alertUser(settings, "Check-in", "Ready"));
+    await assert.doesNotReject(alertUser(settings, "Check-in", "Ready"));
   } finally {
     if (oldWindow) Object.defineProperty(globalThis, "window", oldWindow);
     else Reflect.deleteProperty(globalThis, "window");

@@ -1,5 +1,5 @@
 import { defaults, type State, type Phase } from "./model";
-import { nextClock } from "./schedule";
+import { dayKey, nextClock } from "./schedule";
 export { defaults };
 export const remaining = (s: State, now: number) =>
   s.timer
@@ -173,6 +173,34 @@ export function logCheckpoint(
   else delete c.photo;
   if (!skip && !Object.hasOwn(s.rewards, `check:${id}`))
     s.rewards[`check:${id}`] = 5;
+}
+export function deleteSession(s: State, id: string) {
+  const index = s.sessions.findIndex((session) => session.id === id);
+  if (index < 0) throw new Error("Session no longer exists.");
+  s.sessions.splice(index, 1);
+  delete s.rewards[`focus:${id}`];
+}
+export function deleteCheckpoint(s: State, id: string) {
+  const index = s.checkpoints.findIndex((checkpoint) => checkpoint.id === id);
+  if (index < 0) throw new Error("Check-in no longer exists.");
+  s.checkpoints.splice(index, 1);
+  delete s.rewards[`check:${id}`];
+}
+export function clearDay(s: State, date: string, timezone: string) {
+  for (const checkpoint of s.checkpoints)
+    if (dayKey(checkpoint.end, timezone) === date)
+      delete s.rewards[`check:${checkpoint.id}`];
+  s.checkpoints = s.checkpoints.filter(
+    (checkpoint) => dayKey(checkpoint.end, timezone) !== date,
+  );
+}
+export function resetProgress(s: State) {
+  s.timer = null;
+  s.run = null;
+  s.completedCycle = 0;
+  s.sessions = [];
+  s.checkpoints = [];
+  s.rewards = {};
 }
 export function focusTotal(s: State, from: number, to: number) {
   return s.sessions

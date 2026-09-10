@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-html-link-for-pages, @next/next/no-img-element */
 import { useEffect, useRef, useState } from "react";
 import FullscreenTimer from "./fullscreen-timer";
+import SidebarCompanion from "./sidebar-companion";
 import { LogPhoto } from "./log-photo";
 import {
   Leaf,
@@ -25,11 +26,15 @@ import {
   Bell,
   ChevronRight,
   Maximize2,
+  Music,
+  Trash2,
 } from "lucide-react";
 import type { State, Checkpoint, Schedule, Phase } from "../core/model";
 import {
   activate,
   changeTimezone,
+  clearDay,
+  deleteCheckpoint,
   end,
   logCheckpoint,
   nextPhase,
@@ -38,6 +43,7 @@ import {
   remaining,
   resume,
   startPhase,
+  resetProgress,
   totalXP,
 } from "../core/engine";
 import { dayKey } from "../core/schedule";
@@ -72,6 +78,13 @@ const countdown = (ms: number) => {
   const n = Math.ceil(ms / 1000);
   return `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
 };
+const readAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Could not read that audio file."));
+    reader.readAsDataURL(file);
+  });
 const duration = (ms: number) => {
   const m = Math.floor(ms / 60000);
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
@@ -129,11 +142,7 @@ export default function Pacana() {
     [category, setCategory] = useState("Study"),
     [setup, setSetup] = useState(false),
     [fullscreen, setFullscreen] = useState(false),
-    [editing, setEditing] = useState<Checkpoint | null>(null),
-    [sessionId, setSessionId] = useState<string | null>(null),
-    [note, setNote] = useState("");
-  const [sessionPhoto, setSessionPhoto] = useState<string | undefined>();
-  const [photoBusy, setPhotoBusy] = useState(false);
+    [editing, setEditing] = useState<Checkpoint | null>(null);
   const [date, setDate] = useState(""),
     [online, setOnline] = useState(true);
   const lastTick = useRef(0),
@@ -182,7 +191,14 @@ export default function Pacana() {
               ? "Your session is complete. Take a little breath."
               : `${result.checkpoints} check-in${result.checkpoints === 1 ? "" : "s"} ready to log.`;
             setNotice(text);
-            alertUser(s.settings, "Pacana · A little check-in", text);
+            void alertUser(s.settings, "Pacana · A little check-in", text).then(
+              (soundPlayed) => {
+                if (live && s.settings.sound && !soundPlayed)
+                  setNotice(
+                    "Your timer finished, but sound is blocked. Click the speaker icon to enable and test it.",
+                  );
+              },
+            );
           }
         }
       } catch (e) {
@@ -551,11 +567,33 @@ export default function Pacana() {
                       className={
                         state.settings.sound ? "sound active" : "sound"
                       }
-                      onClick={() =>
-                        void update((s) => {
-                          s.settings.sound = !s.settings.sound;
-                        })
-                      }
+                      onClick={async () => {
+                        const sound = !state.settings.sound;
+                        if (sound)
+                          await unlockAudio(state.settings.customRingtone);
+                        if (
+                          await update((s) => {
+                            s.settings.sound = sound;
+                          })
+                        ) {
+                          if (!sound) return;
+                          try {
+                            await previewRingtone({
+                              ...state.settings,
+                              sound: true,
+                            });
+                            setNotice(
+                              "Sound is on. You should hear a short preview now.",
+                            );
+                          } catch (error) {
+                            setError(
+                              error instanceof Error
+                                ? error.message
+                                : "Sound could not start.",
+                            );
+                          }
+                        }
+                      }}
                     >
                       <Volume2 size={18} />
                     </button>
@@ -567,24 +605,10 @@ export default function Pacana() {
                     <div>
                       <h3>A little progress, made.</h3>
                       <p>
-                        +{Math.floor(timer.duration / 60000)} XP · What did you
-                        accomplish?
+                        +{Math.floor(timer.duration / 60000)} XP · Your measured
+                        focus time is saved in Progress.
                       </p>
                     </div>
-                    <button
-                      onClick={() => {
-                        setSessionId(timer.id);
-                        setSessionPhoto(
-                          state.sessions.find((s) => s.id === timer.id)?.photo,
-                        );
-                        setNote(
-                          state.sessions.find((s) => s.id === timer.id)?.note ||
-                            "",
-                        );
-                      }}
-                    >
-                      Add a note
-                    </button>
                   </div>
                 )}
                 <div className="task-card card">
@@ -705,10 +729,16 @@ export default function Pacana() {
                   Open your journal <ArrowRight size={16} />
                 </button>
                 <div className="kind-note">
-                  <div
-                    role="img"
-                    aria-label="Your capybara companion"
-                    className={`companion ${timer?.status === "complete" ? "celebrate" : phase !== "focus" ? "rest" : timer?.status === "running" ? "study" : "idle"}`}
+                  <SidebarCompanion
+                    pose={
+                      timer?.status === "complete"
+                        ? "celebrate"
+                        : phase !== "focus"
+                          ? "rest"
+                          : timer?.status === "running"
+                            ? "study"
+                            : "idle"
+                    }
                   />
                   <p>
                     A moment to notice.
@@ -790,116 +820,85 @@ export default function Pacana() {
                   onChange={(e) => setDate(e.target.value)}
                 />
               </div>
-              <p>Timer records and your reflections are shown separately.</p>
-              {[
-                ...state.checkpoints
-                  .filter(
-                    (c) => dayKey(c.end, state.settings.timezone) === selected,
-                  )
-                  .map((c) => ({ at: c.end, id: c.id, checkpoint: c })),
-                ...state.sessions
-                  .filter(
-                    (s) =>
-                      dayKey(s.endedAt, state.settings.timezone) === selected,
-                  )
-                  .map((s) => ({ at: s.endedAt, id: s.id, session: s })),
-              ]
-                .sort((a, b) => a.at - b.at)
-                .map((item) =>
-                  "checkpoint" in item ? (
-                    <div className="log-row" key={item.id}>
-                      <span
-                        className={"timeline-dot " + item.checkpoint.status}
-                      >
-                        {item.checkpoint.status === "logged" ? (
-                          <Check size={14} />
-                        ) : (
-                          <Clock3 size={14} />
-                        )}
-                      </span>
-                      <div>
-                        <small>
-                          {time(item.checkpoint.start)} –{" "}
-                          {time(item.checkpoint.end)} · Check-in
-                        </small>
-                        <strong>
-                          {item.checkpoint.activity ||
-                            (item.checkpoint.photo ? "Photo reflection" : "") ||
-                            (item.checkpoint.status === "pending"
+              <p>
+                Only check-ins and reflections live in your journal. Focus time
+                lives in Progress.
+              </p>
+              {state.checkpoints
+                .filter(
+                  (checkpoint) =>
+                    dayKey(checkpoint.end, state.settings.timezone) ===
+                    selected,
+                )
+                .sort((a, b) => a.end - b.end)
+                .map((checkpoint) => (
+                  <div className="log-row" key={checkpoint.id}>
+                    <span className={"timeline-dot " + checkpoint.status}>
+                      {checkpoint.status === "logged" ? (
+                        <Check size={14} />
+                      ) : (
+                        <Clock3 size={14} />
+                      )}
+                    </span>
+                    <div>
+                      <small>
+                        {time(checkpoint.start)} – {time(checkpoint.end)} ·
+                        Check-in
+                      </small>
+                      <strong>
+                        {checkpoint.activity ||
+                          (checkpoint.photo
+                            ? "Photo reflection"
+                            : checkpoint.status === "pending"
                               ? "Unlogged period"
                               : "Skipped")}
-                        </strong>
-                        <p>
-                          {item.checkpoint.category}
-                          {item.checkpoint.mood && ` · ${item.checkpoint.mood}`}
-                        </p>
-                        {item.checkpoint.photo && (
-                          <a
-                            href={item.checkpoint.photo}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            <img
-                              className="journal-photo"
-                              src={item.checkpoint.photo}
-                              alt="Photo of this activity"
-                            />
-                          </a>
-                        )}
-                      </div>
-                      <button onClick={() => setEditing(item.checkpoint)}>
+                      </strong>
+                      <p>
+                        {checkpoint.category}
+                        {checkpoint.mood && ` · ${checkpoint.mood}`}
+                      </p>
+                      {checkpoint.photo && (
+                        <a
+                          href={checkpoint.photo}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <img
+                            className="journal-photo"
+                            src={checkpoint.photo}
+                            alt="Photo of this activity"
+                          />
+                        </a>
+                      )}
+                    </div>
+                    <div className="log-actions">
+                      <button onClick={() => setEditing(checkpoint)}>
                         Edit
                       </button>
-                    </div>
-                  ) : (
-                    <div className="log-row" key={item.id}>
-                      <Timer />
-                      <div>
-                        <small>
-                          {time(item.session.startedAt)} –{" "}
-                          {time(item.session.endedAt)} · Focus timer
-                        </small>
-                        <strong>{item.session.task || "Focus session"}</strong>
-                        <p>
-                          {duration(item.session.duration)} ·{" "}
-                          {item.session.status}
-                          {item.session.note && ` · ${item.session.note}`}
-                        </p>
-                        {item.session.photo && (
-                          <a
-                            href={item.session.photo}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            <img
-                              className="journal-photo"
-                              src={item.session.photo}
-                              alt="Photo of this focus session"
-                            />
-                          </a>
-                        )}
-                      </div>
                       <button
+                        className="danger-link"
+                        aria-label="Delete check-in"
                         onClick={() => {
-                          setSessionId(item.id);
-                          setNote(item.session.note);
-                          setSessionPhoto(item.session.photo);
+                          if (
+                            window.confirm(
+                              "Delete this check-in? Its reflection and XP reward will be removed.",
+                            )
+                          )
+                            void update((s) =>
+                              deleteCheckpoint(s, checkpoint.id),
+                            );
                         }}
                       >
-                        Edit note
+                        <Trash2 size={16} />
                       </button>
                     </div>
-                  ),
-                )}
+                  </div>
+                ))}
               {!state.checkpoints.some(
                 (c) => dayKey(c.end, state.settings.timezone) === selected,
-              ) &&
-                !state.sessions.some(
-                  (s) =>
-                    dayKey(s.endedAt, state.settings.timezone) === selected,
-                ) && (
-                  <Empty text="Nothing written here yet. Your next session is a lovely place to start." />
-                )}
+              ) && (
+                <Empty text="No check-ins here yet. Start a rhythm when you want to reflect on your day." />
+              )}
             </section>
           )}
           {tab === "Progress" && <Progress state={state} now={now} />}
@@ -995,45 +994,6 @@ export default function Pacana() {
                 setEditing(null);
             }}
           />
-        </Modal>
-      )}
-      {sessionId && (
-        <Modal
-          title="What did you accomplish?"
-          close={() => setSessionId(null)}
-        >
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (photoBusy) return;
-              const saved = await update((s) => {
-                const item = s.sessions.find((x) => x.id === sessionId);
-                if (item) {
-                  item.note = note;
-                  item.photo = sessionPhoto;
-                }
-              });
-              if (saved) setSessionId(null);
-            }}
-          >
-            <label className="field">
-              Session note
-              <textarea
-                autoFocus
-                maxLength={10000}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </label>
-            <button className="primary">
-              {photoBusy ? "Preparing photo…" : "Save note"} <Check size={17} />
-            </button>
-            <LogPhoto
-              value={sessionPhoto}
-              onChange={setSessionPhoto}
-              onBusy={setPhotoBusy}
-            />
-          </form>
         </Modal>
       )}
       {!state.settings.onboarded && (
@@ -1528,7 +1488,8 @@ function Preferences({
   onRestore: (s: State) => void;
 }) {
   const [zone, setZone] = useState(state.settings.timezone),
-    [backup, setBackup] = useState<State | null>(null);
+    [backup, setBackup] = useState<State | null>(null),
+    [clearAction, setClearAction] = useState<"day" | "all" | null>(null);
   return (
     <div className="two-col preferences">
       <section className="card settings-card">
@@ -1549,11 +1510,25 @@ function Preferences({
             <input
               type="checkbox"
               checked={state.settings.sound}
-              onChange={(e) =>
-                void update((s) => {
-                  s.settings.sound = e.target.checked;
-                })
-              }
+              onChange={async (e) => {
+                const sound = e.target.checked;
+                if (sound) await unlockAudio(state.settings.customRingtone);
+                if (
+                  await update((s) => {
+                    s.settings.sound = sound;
+                  })
+                ) {
+                  if (sound)
+                    try {
+                      await previewRingtone({ ...state.settings, sound: true });
+                      setNotice(
+                        "Sound is on. You should hear a short preview now.",
+                      );
+                    } catch (error) {
+                      setError((error as Error).message);
+                    }
+                }
+              }}
             />{" "}
             Play a soft chime
           </label>
@@ -1573,12 +1548,13 @@ function Preferences({
                   {r.name}
                 </option>
               ))}
+              <option value="custom">My uploaded audio</option>
             </select>
           </label>
           <button
             onClick={async () => {
               try {
-                await previewRingtone(state.settings.ringtone);
+                await previewRingtone(state.settings);
               } catch {
                 setError(
                   "Sound could not play. Check your browser audio permissions and device volume.",
@@ -1588,10 +1564,61 @@ function Preferences({
           >
             <Volume2 size={17} /> Preview ringtone
           </button>
+          <label className="file-button">
+            <Music size={17} /> Upload audio ringtone
+            <input
+              type="file"
+              accept="audio/mpeg,audio/wav,audio/ogg,audio/mp4,audio/webm,.mp3,.wav,.ogg,.m4a,.webm"
+              onChange={async (e) => {
+                try {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (
+                    !file.type.startsWith("audio/") ||
+                    file.size > 5 * 1024 * 1024
+                  )
+                    throw new Error("Choose an audio file under 5 MB.");
+                  const customRingtone = await readAsDataUrl(file);
+                  if (
+                    await update((s) => {
+                      s.settings.ringtone = "custom";
+                      s.settings.customRingtone = customRingtone;
+                      s.settings.sound = true;
+                    })
+                  ) {
+                    await previewRingtone({
+                      ...state.settings,
+                      ringtone: "custom",
+                      customRingtone,
+                      sound: true,
+                    });
+                    setNotice(
+                      "Your custom ringtone is saved and ready for timer completion.",
+                    );
+                  }
+                } catch (error) {
+                  setError((error as Error).message);
+                }
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {state.settings.customRingtone && (
+            <button
+              className="text-link"
+              onClick={() =>
+                void update((s) => {
+                  delete s.settings.customRingtone;
+                  s.settings.ringtone = "classic";
+                })
+              }
+            >
+              Remove uploaded ringtone
+            </button>
+          )}
           <p className="muted">
-            Free, open-source synthesized chimes. Works offline, with no
-            downloads. Enable “Play a soft chime” to use your selection for
-            reminders.
+            Choose a synthesized chime or upload your own audio. Enabling sound
+            plays a preview and unlocks it for timer completion.
           </p>
           <button
             onClick={async () => {
@@ -1648,6 +1675,24 @@ function Preferences({
             </datalist>
             <button>Save timezone</button>
           </form>
+        </section>
+        <section className="card settings-card reset-card">
+          <h2>Reset your journal</h2>
+          <p className="muted">
+            Journal controls affect only check-ins and reflections. Focus time
+            and XP remain in Progress.
+          </p>
+          <div className="actions">
+            <button onClick={() => setClearAction("day")}>
+              Clear today’s journal
+            </button>
+            <button
+              className="danger-button"
+              onClick={() => setClearAction("all")}
+            >
+              Reset all progress
+            </button>
+          </div>
         </section>
         <section className="card settings-card">
           <h2>Your data stays with you</h2>
@@ -1726,6 +1771,49 @@ function Preferences({
               Replace and restore
             </button>
             <button onClick={() => setBackup(null)}>Keep current data</button>
+          </div>
+        </Modal>
+      )}
+      {clearAction && (
+        <Modal
+          title={
+            clearAction === "day"
+              ? "Clear today’s journal?"
+              : "Reset all Pacana progress?"
+          }
+          close={() => setClearAction(null)}
+        >
+          <p>
+            {clearAction === "day"
+              ? "This removes today’s check-ins and reflections, including their photos and check-in XP. Focus time and progress stay intact."
+              : "This removes every focus session, check-in, journal entry, XP reward, and active timer. Your preferences and backup files stay intact."}
+          </p>
+          <div className="actions">
+            <button
+              className="danger-button"
+              onClick={async () => {
+                const done = await update((s) =>
+                  clearAction === "day"
+                    ? clearDay(
+                        s,
+                        dayKey(Date.now(), s.settings.timezone),
+                        s.settings.timezone,
+                      )
+                    : resetProgress(s),
+                );
+                if (done) {
+                  setClearAction(null);
+                  setNotice(
+                    clearAction === "day"
+                      ? "Today’s journal has been cleared."
+                      : "Progress has been reset.",
+                  );
+                }
+              }}
+            >
+              {clearAction === "day" ? "Clear today" : "Reset progress"}
+            </button>
+            <button onClick={() => setClearAction(null)}>Keep my data</button>
           </div>
         </Modal>
       )}

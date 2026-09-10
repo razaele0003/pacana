@@ -1,22 +1,52 @@
 import type { Settings } from "../core/model";
-import { ringtones, type Ringtone } from "../core/ringtones";
+import { ringtones } from "../core/ringtones";
 let audio: AudioContext | undefined;
-let playing: OscillatorNode[] = [];
-export function unlockAudio() {
+let playing: AudioScheduledSourceNode[] = [];
+let customSource = "";
+let customBuffer: AudioBuffer | undefined;
+export async function unlockAudio(custom?: string) {
   try {
     audio ??= new AudioContext();
-    void audio.resume();
+    await audio.resume();
+    if (custom) void loadCustom(custom);
   } catch {}
 }
-function playRingtone(id: Ringtone) {
-  if (!audio || audio.state !== "running") return;
+async function loadCustom(source: string) {
+  if (!audio) return;
+  if (customSource === source && customBuffer) return customBuffer;
+  const response = await fetch(source);
+  customBuffer = await audio.decodeAudioData(await response.arrayBuffer());
+  customSource = source;
+  return customBuffer;
+}
+async function playRingtone(settings: Settings) {
+  audio ??= new AudioContext();
+  if (audio.state !== "running") await audio.resume();
+  if (audio.state !== "running") throw new Error("Sound could not start.");
   for (const oscillator of playing) {
     try {
       oscillator.stop();
     } catch {}
   }
   playing = [];
-  const chosen = ringtones.find((r) => r.id === id) ?? ringtones[0];
+  if (settings.ringtone === "custom") {
+    if (!settings.customRingtone)
+      throw new Error("Upload a custom ringtone first.");
+    const source = audio.createBufferSource();
+    const buffer = await loadCustom(settings.customRingtone);
+    if (!buffer) throw new Error("Could not prepare the custom ringtone.");
+    source.buffer = buffer;
+    source.connect(audio.destination);
+    source.onended = () => {
+      source.disconnect();
+      playing = playing.filter((x) => x !== source);
+    };
+    playing.push(source);
+    source.start();
+    return;
+  }
+  const chosen =
+    ringtones.find((r) => r.id === settings.ringtone) ?? ringtones[0];
   const context = audio;
   chosen.notes.forEach((frequency, index) => {
     const start = context.currentTime + index * chosen.step;
@@ -39,17 +69,24 @@ function playRingtone(id: Ringtone) {
     tone.stop(start + chosen.length);
   });
 }
-export async function previewRingtone(id: Ringtone) {
-  audio ??= new AudioContext();
-  await audio.resume();
-  if (audio.state !== "running")
-    throw new Error(
-      "Sound could not start. Check your browser audio permissions.",
-    );
-  playRingtone(id);
+export async function previewRingtone(settings: Settings) {
+  await unlockAudio(settings.customRingtone);
+  await playRingtone(settings);
 }
-export function alertUser(settings: Settings, title: string, body: string) {
-  if (settings.sound) playRingtone(settings.ringtone);
+export async function alertUser(
+  settings: Settings,
+  title: string,
+  body: string,
+) {
+  let soundPlayed = false;
+  if (settings.sound) {
+    try {
+      await playRingtone(settings);
+      soundPlayed = true;
+    } catch {
+      // The caller shows an in-app fallback instead of failing the timer tick.
+    }
+  }
   if (
     settings.notifications &&
     "Notification" in window &&
@@ -69,6 +106,7 @@ export function alertUser(settings: Settings, title: string, body: string) {
       /* In-app pending list remains available on platforms requiring push. */
     }
   }
+  return soundPlayed;
 }
 export async function enableNotifications() {
   if (!("Notification" in window))

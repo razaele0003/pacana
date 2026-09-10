@@ -34,4 +34,4 @@ export const ringtones = [
     wave: "triangle",
   },
 ] as const;
-export type Ringtone = (typeof ringtones)[number]["id"];
+export type Ringtone = (typeof ringtones)[number]["id"] | "custom";

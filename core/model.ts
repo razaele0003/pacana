@@ -10,6 +10,7 @@ export type Settings = {
   timezone: string;
   sound: boolean;
   ringtone: Ringtone;
+  customRingtone?: string;
   notifications: boolean;
   onboarded: boolean;
 };

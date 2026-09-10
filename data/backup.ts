@@ -7,6 +7,13 @@ const photo = z
   .max(1500000)
   .regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/)
   .optional();
+const customRingtone = z
+  .string()
+  .max(8000000)
+  .regex(
+    /^data:audio\/(?:mpeg|wav|ogg|mp4|webm|x-m4a);base64,[A-Za-z0-9+/]+={0,2}$/,
+  )
+  .optional();
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const timezone = z.string().refine((v) => {
   try {
@@ -41,8 +48,9 @@ const schema = z.object({
     timezone,
     sound: z.boolean(),
     ringtone: z
-      .enum(["classic", "woodland", "raindrop", "sunrise"])
+      .enum(["classic", "woodland", "raindrop", "sunrise", "custom"])
       .default("classic"),
+    customRingtone,
     notifications: z.boolean(),
     onboarded: z.boolean(),
   }),
