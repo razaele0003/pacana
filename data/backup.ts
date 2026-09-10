@@ -1,0 +1,144 @@
+import { z } from "zod";
+import type { State } from "../core/model";
+const timestamp = z.number().finite().nonnegative().max(8640000000000000);
+const positive = z.number().int().min(1).max(1440);
+const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const timezone = z.string().refine((v) => {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: v });
+    return true;
+  } catch {
+    return false;
+  }
+}, "Invalid timezone");
+const schedule = z
+  .object({
+    start: clock,
+    end: clock,
+    interval: positive,
+    days: z.array(z.number().int().min(0).max(6)).min(1).max(7),
+    explicit: z.array(clock).max(1440),
+  })
+  .refine(
+    (v) => v.explicit.length > 0 || v.end >= v.start,
+    "End time must follow start time",
+  );
+const schema = z.object({
+  version: z.literal(1),
+  revision: z.number().int().nonnegative(),
+  settings: z.object({
+    focus: positive,
+    short: positive,
+    long: positive,
+    cycles: z.number().int().min(1).max(24),
+    autoBreak: z.boolean(),
+    autoFocus: z.boolean(),
+    timezone,
+    sound: z.boolean(),
+    notifications: z.boolean(),
+    onboarded: z.boolean(),
+  }),
+  timer: z
+    .object({
+      id: z.string(),
+      phase: z.enum(["focus", "short", "long"]),
+      status: z.enum(["running", "paused", "complete"]),
+      startedAt: timestamp,
+      endAt: timestamp,
+      remaining: timestamp,
+      duration: timestamp,
+      task: z.string().max(1000),
+      category: z.string().max(100),
+    })
+    .refine(
+      (t) =>
+        t.duration > 0 && t.remaining <= t.duration && t.endAt >= t.startedAt,
+    )
+    .nullable(),
+  completedCycle: z.number().int().nonnegative(),
+  schedule,
+  interval: positive,
+  run: z
+    .object({
+      id: z.string(),
+      mode: z.enum(["clock", "elapsed"]),
+      activatedAt: timestamp,
+      previousAt: timestamp,
+      nextAt: timestamp,
+      interval: positive,
+      timezone,
+      schedule,
+    })
+    .refine((r) => r.nextAt > r.previousAt && r.previousAt >= r.activatedAt)
+    .nullable(),
+  sessions: z
+    .array(
+      z
+        .object({
+          id: z.string(),
+          startedAt: timestamp,
+          endedAt: timestamp,
+          duration: timestamp,
+          status: z.enum(["completed", "abandoned"]),
+          task: z.string().max(1000),
+          category: z.string().max(100),
+          note: z.string().max(10000),
+        })
+        .refine(
+          (s) =>
+            s.endedAt >= s.startedAt && s.duration <= s.endedAt - s.startedAt,
+        ),
+    )
+    .max(100000),
+  checkpoints: z
+    .array(
+      z
+        .object({
+          id: z.string(),
+          runId: z.string(),
+          start: timestamp,
+          end: timestamp,
+          status: z.enum(["pending", "logged", "skipped"]),
+          activity: z.string().max(10000),
+          category: z.string().max(100),
+          mood: z.string().max(100),
+          loggedAt: timestamp.optional(),
+        })
+        .refine((c) => c.end > c.start),
+    )
+    .max(100000),
+  rewards: z.record(z.number().int().nonnegative()),
+});
+export function parseBackup(input: unknown): State {
+  const result = schema.safeParse(input);
+  if (!result.success)
+    throw new Error(
+      "This backup is invalid or uses an unsupported version. Your current data is unchanged.",
+    );
+  const s = result.data;
+  if (
+    new Set(s.sessions.map((x) => x.id)).size !== s.sessions.length ||
+    new Set(s.checkpoints.map((x) => x.id)).size !== s.checkpoints.length
+  )
+    throw new Error("Backup contains duplicate records.");
+  for (const [key, value] of Object.entries(s.rewards)) {
+    if (key.startsWith("focus:")) {
+      const session = s.sessions.find((x) => `focus:${x.id}` === key);
+      if (
+        !session ||
+        session.status !== "completed" ||
+        value !== Math.floor(session.duration / 60000)
+      )
+        throw new Error("Invalid focus reward in backup.");
+    } else if (key.startsWith("check:")) {
+      if (
+        value !== 5 ||
+        !s.checkpoints.some(
+          (x) => `check:${x.id}` === key && x.loggedAt !== undefined,
+        )
+      )
+        throw new Error("Invalid checkpoint reward in backup.");
+    } else throw new Error("Unknown reward in backup.");
+  }
+  return s;
+}
