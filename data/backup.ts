@@ -2,6 +2,11 @@ import { z } from "zod";
 import type { State } from "../core/model";
 const timestamp = z.number().finite().nonnegative().max(8640000000000000);
 const positive = z.number().int().min(1).max(1440);
+const photo = z
+  .string()
+  .max(1500000)
+  .regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/)
+  .optional();
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const timezone = z.string().refine((v) => {
   try {
@@ -35,6 +40,9 @@ const schema = z.object({
     autoFocus: z.boolean(),
     timezone,
     sound: z.boolean(),
+    ringtone: z
+      .enum(["classic", "woodland", "raindrop", "sunrise"])
+      .default("classic"),
     notifications: z.boolean(),
     onboarded: z.boolean(),
   }),
@@ -83,6 +91,7 @@ const schema = z.object({
           task: z.string().max(1000),
           category: z.string().max(100),
           note: z.string().max(10000),
+          photo,
         })
         .refine(
           (s) =>
@@ -103,6 +112,7 @@ const schema = z.object({
           category: z.string().max(100),
           mood: z.string().max(100),
           loggedAt: timestamp.optional(),
+          photo,
         })
         .refine((c) => c.end > c.start),
     )

@@ -1,6 +1,6 @@
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-const root = "dist/client";
+const root = process.argv[2] || "dist/client";
 async function walk(dir) {
   const result = [];
   for (const e of await readdir(dir, { withFileTypes: true })) {

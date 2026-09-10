@@ -2,6 +2,8 @@
 /* Native links intentionally load cached HTML for offline navigation. Artwork is locally optimized WebP. */
 /* eslint-disable @next/next/no-html-link-for-pages, @next/next/no-img-element */
 import { useEffect, useRef, useState } from "react";
+import FullscreenTimer from "./fullscreen-timer";
+import { LogPhoto } from "./log-photo";
 import {
   Leaf,
   Timer,
@@ -22,6 +24,7 @@ import {
   Sprout,
   Bell,
   ChevronRight,
+  Maximize2,
 } from "lucide-react";
 import type { State, Checkpoint, Schedule, Phase } from "../core/model";
 import {
@@ -40,11 +43,13 @@ import {
 import { dayKey } from "../core/schedule";
 import { transact, restore } from "../data/store";
 import { parseBackup } from "../data/backup";
+import { ringtones, type Ringtone } from "../core/ringtones";
 import {
   alertUser,
   enableNotifications,
   setupOffline,
   unlockAudio,
+  previewRingtone,
 } from "../adapters/browser";
 
 const tabs = [
@@ -123,9 +128,12 @@ export default function Pacana() {
   const [task, setTask] = useState(""),
     [category, setCategory] = useState("Study"),
     [setup, setSetup] = useState(false),
+    [fullscreen, setFullscreen] = useState(false),
     [editing, setEditing] = useState<Checkpoint | null>(null),
     [sessionId, setSessionId] = useState<string | null>(null),
     [note, setNote] = useState("");
+  const [sessionPhoto, setSessionPhoto] = useState<string | undefined>();
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [date, setDate] = useState(""),
     [online, setOnline] = useState(true);
   const lastTick = useRef(0),
@@ -409,6 +417,13 @@ export default function Pacana() {
                     >
                       <Settings2 size={18} />
                     </button>
+                    <button
+                      aria-label="Open fullscreen timer"
+                      title="Fullscreen timer"
+                      onClick={() => setFullscreen(true)}
+                    >
+                      <Maximize2 size={18} />
+                    </button>
                   </div>
                   <div className="timer-scene">
                     <img
@@ -559,6 +574,9 @@ export default function Pacana() {
                     <button
                       onClick={() => {
                         setSessionId(timer.id);
+                        setSessionPhoto(
+                          state.sessions.find((s) => s.id === timer.id)?.photo,
+                        );
                         setNote(
                           state.sessions.find((s) => s.id === timer.id)?.note ||
                             "",
@@ -806,6 +824,7 @@ export default function Pacana() {
                         </small>
                         <strong>
                           {item.checkpoint.activity ||
+                            (item.checkpoint.photo ? "Photo reflection" : "") ||
                             (item.checkpoint.status === "pending"
                               ? "Unlogged period"
                               : "Skipped")}
@@ -814,6 +833,19 @@ export default function Pacana() {
                           {item.checkpoint.category}
                           {item.checkpoint.mood && ` · ${item.checkpoint.mood}`}
                         </p>
+                        {item.checkpoint.photo && (
+                          <a
+                            href={item.checkpoint.photo}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <img
+                              className="journal-photo"
+                              src={item.checkpoint.photo}
+                              alt="Photo of this activity"
+                            />
+                          </a>
+                        )}
                       </div>
                       <button onClick={() => setEditing(item.checkpoint)}>
                         Edit
@@ -833,11 +865,25 @@ export default function Pacana() {
                           {item.session.status}
                           {item.session.note && ` · ${item.session.note}`}
                         </p>
+                        {item.session.photo && (
+                          <a
+                            href={item.session.photo}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <img
+                              className="journal-photo"
+                              src={item.session.photo}
+                              alt="Photo of this focus session"
+                            />
+                          </a>
+                        )}
                       </div>
                       <button
                         onClick={() => {
                           setSessionId(item.id);
                           setNote(item.session.note);
+                          setSessionPhoto(item.session.photo);
                         }}
                       >
                         Edit note
@@ -884,6 +930,30 @@ export default function Pacana() {
           </button>
         ))}
       </nav>
+      {fullscreen && (
+        <FullscreenTimer
+          state={state}
+          now={now}
+          error={error}
+          close={() => setFullscreen(false)}
+          stop={() => void update((s) => end(s, Date.now()))}
+          primary={() =>
+            void update((s) => {
+              if (!s.timer) startPhase(s, Date.now(), "focus", task, category);
+              else if (s.timer.status === "running") pause(s, Date.now());
+              else if (s.timer.status === "paused") resume(s, Date.now());
+              else
+                startPhase(
+                  s,
+                  Date.now(),
+                  nextPhase(s),
+                  s.timer.task,
+                  s.timer.category,
+                );
+            })
+          }
+        />
+      )}
       {setup && (
         <Modal title="Find your focus rhythm" close={() => setSetup(false)}>
           <TimerSettings
@@ -907,7 +977,7 @@ export default function Pacana() {
           </p>
           <LogForm
             checkpoint={editing}
-            save={async (activity, cat, mood, skip) => {
+            save={async (activity, cat, mood, skip, photo) => {
               if (
                 await update((s) =>
                   logCheckpoint(
@@ -918,6 +988,7 @@ export default function Pacana() {
                     mood,
                     Date.now(),
                     skip,
+                    photo,
                   ),
                 )
               )
@@ -934,9 +1005,13 @@ export default function Pacana() {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
+              if (photoBusy) return;
               const saved = await update((s) => {
                 const item = s.sessions.find((x) => x.id === sessionId);
-                if (item) item.note = note;
+                if (item) {
+                  item.note = note;
+                  item.photo = sessionPhoto;
+                }
               });
               if (saved) setSessionId(null);
             }}
@@ -951,8 +1026,13 @@ export default function Pacana() {
               />
             </label>
             <button className="primary">
-              Save note <Check size={17} />
+              {photoBusy ? "Preparing photo…" : "Save note"} <Check size={17} />
             </button>
+            <LogPhoto
+              value={sessionPhoto}
+              onChange={setSessionPhoto}
+              onBusy={setPhotoBusy}
+            />
           </form>
         </Modal>
       )}
@@ -1272,29 +1352,38 @@ function LogForm({
   save,
 }: {
   checkpoint: Checkpoint;
-  save: (a: string, c: string, m: string, skip: boolean) => void;
+  save: (
+    a: string,
+    c: string,
+    m: string,
+    skip: boolean,
+    photo?: string,
+  ) => void;
 }) {
   const [activity, setActivity] = useState(checkpoint.activity),
     [category, setCategory] = useState(checkpoint.category),
     [mood, setMood] = useState(checkpoint.mood);
+  const [photo, setPhoto] = useState(checkpoint.photo);
+  const [busy, setBusy] = useState(false);
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        save(activity, category, mood, false);
+        if (!busy) save(activity, category, mood, false, photo);
       }}
     >
       <label className="field">
         What did you do?
         <textarea
           autoFocus
-          required
+          required={!photo}
           maxLength={10000}
           placeholder="A few words about this little part of your day…"
           value={activity}
           onChange={(e) => setActivity(e.target.value)}
         />
       </label>
+      <LogPhoto value={photo} onChange={setPhoto} onBusy={setBusy} />
       <div className="quick-options">
         {["Break", "Away"].map((v) => (
           <button
@@ -1468,6 +1557,42 @@ function Preferences({
             />{" "}
             Play a soft chime
           </label>
+          <label className="field">
+            Ringtone
+            <select
+              value={state.settings.ringtone}
+              onChange={(e) => {
+                const ringtone = e.target.value as Ringtone;
+                void update((s) => {
+                  s.settings.ringtone = ringtone;
+                });
+              }}
+            >
+              {ringtones.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            onClick={async () => {
+              try {
+                await previewRingtone(state.settings.ringtone);
+              } catch {
+                setError(
+                  "Sound could not play. Check your browser audio permissions and device volume.",
+                );
+              }
+            }}
+          >
+            <Volume2 size={17} /> Preview ringtone
+          </button>
+          <p className="muted">
+            Free, open-source synthesized chimes. Works offline, with no
+            downloads. Enable “Play a soft chime” to use your selection for
+            reminders.
+          </p>
           <button
             onClick={async () => {
               try {

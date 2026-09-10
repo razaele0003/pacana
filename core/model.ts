@@ -1,3 +1,4 @@
+import type { Ringtone } from "./ringtones";
 export type Phase = "focus" | "short" | "long";
 export type Settings = {
   focus: number;
@@ -8,6 +9,7 @@ export type Settings = {
   autoFocus: boolean;
   timezone: string;
   sound: boolean;
+  ringtone: Ringtone;
   notifications: boolean;
   onboarded: boolean;
 };
@@ -31,6 +33,7 @@ export type Session = {
   task: string;
   category: string;
   note: string;
+  photo?: string;
 };
 export type Schedule = {
   start: string;
@@ -59,6 +62,7 @@ export type Checkpoint = {
   category: string;
   mood: string;
   loggedAt?: number;
+  photo?: string;
 };
 export type State = {
   version: 1;
@@ -84,6 +88,7 @@ export const defaults = (timezone = "Asia/Manila"): State => ({
     autoFocus: false,
     timezone,
     sound: false,
+    ringtone: "classic",
     notifications: false,
     onboarded: false,
   },

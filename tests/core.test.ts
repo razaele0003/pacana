@@ -16,6 +16,50 @@ import {
 } from "../core/engine";
 import { nextClock, localInstant } from "../core/schedule";
 import { parseBackup } from "../data/backup";
+test("photo-only reflections restore completely and edits do not duplicate XP", () => {
+  const s = defaults();
+  s.checkpoints.push({
+    id: "photo",
+    runId: "run",
+    start: 0,
+    end: 60000,
+    status: "pending",
+    activity: "",
+    category: "Study",
+    mood: "",
+  });
+  const photo = "data:image/jpeg;base64,/9j/2Q==";
+  logCheckpoint(s, "photo", "", "Study", "", 60001, false, photo);
+  assert.equal(totalXP(s), 5);
+  logCheckpoint(s, "photo", "Updated", "Study", "", 60002, false, photo);
+  assert.equal(totalXP(s), 5);
+  assert.equal(
+    parseBackup(JSON.parse(JSON.stringify(s))).checkpoints[0].photo,
+    photo,
+  );
+  s.checkpoints[0].photo = "data:image/svg+xml;base64,PHN2Zz4=";
+  assert.throws(() => parseBackup(s));
+});
+test("ringtone preferences preserve old journals and round-trip through backup", () => {
+  const old = JSON.parse(JSON.stringify(defaults()));
+  delete old.settings.ringtone;
+  assert.equal(parseBackup(old).settings.ringtone, "classic");
+  for (const ringtone of [
+    "classic",
+    "woodland",
+    "raindrop",
+    "sunrise",
+  ] as const) {
+    const s = defaults();
+    s.settings.ringtone = ringtone;
+    assert.equal(
+      parseBackup(JSON.parse(JSON.stringify(s))).settings.ringtone,
+      ringtone,
+    );
+  }
+  old.settings.ringtone = "invalid";
+  assert.throws(() => parseBackup(old));
+});
 import "fake-indexeddb/auto";
 import { transact, restore } from "../data/store";
 import { enableNotifications, alertUser } from "../adapters/browser";

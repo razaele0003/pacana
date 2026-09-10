@@ -156,10 +156,12 @@ export function logCheckpoint(
   mood: string,
   now: number,
   skip = false,
+  photo?: string,
 ) {
   const c = s.checkpoints.find((x) => x.id === id);
   if (!c) throw new Error("Checkpoint no longer exists.");
-  if (!skip && !activity.trim()) throw new Error("Add a short activity note.");
+  if (!skip && !activity.trim() && !photo)
+    throw new Error("Add a short activity note or photo.");
   Object.assign(c, {
     activity: activity.trim(),
     category,
@@ -167,6 +169,8 @@ export function logCheckpoint(
     status: skip ? "skipped" : "logged",
     loggedAt: now,
   });
+  if (!skip && photo) c.photo = photo;
+  else delete c.photo;
   if (!skip && !Object.hasOwn(s.rewards, `check:${id}`))
     s.rewards[`check:${id}`] = 5;
 }
