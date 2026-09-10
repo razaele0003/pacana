@@ -191,14 +191,16 @@ export default function Pacana() {
               ? "Your session is complete. Take a little breath."
               : `${result.checkpoints} check-in${result.checkpoints === 1 ? "" : "s"} ready to log.`;
             setNotice(text);
-            void alertUser(s.settings, "Pacana · A little check-in", text).then(
-              (soundPlayed) => {
-                if (live && s.settings.sound && !soundPlayed)
-                  setNotice(
-                    "Your timer finished, but sound is blocked. Click the speaker icon to enable and test it.",
-                  );
-              },
-            );
+            void alertUser(s.settings, "Pacana · A little check-in", text, {
+              // A finished focus or break phase is always an alarm. Check-in
+              // chimes still follow the optional reminder-sound preference.
+              forceSound: result.completed,
+            }).then((soundPlayed) => {
+              if (live && result.completed && !soundPlayed)
+                setNotice(
+                  "Your timer finished, but sound is blocked. Click the speaker icon to enable and test it.",
+                );
+            });
           }
         }
       } catch (e) {
@@ -562,7 +564,9 @@ export default function Pacana() {
                     </span>
                     <button
                       aria-label={
-                        state.settings.sound ? "Mute sound" : "Enable sound"
+                        state.settings.sound
+                          ? "Mute check-in sounds"
+                          : "Enable check-in sounds"
                       }
                       className={
                         state.settings.sound ? "sound active" : "sound"
@@ -1530,7 +1534,7 @@ function Preferences({
                 }
               }}
             />{" "}
-            Play a soft chime
+            Play a chime for check-ins
           </label>
           <label className="field">
             Ringtone
@@ -1617,8 +1621,9 @@ function Preferences({
             </button>
           )}
           <p className="muted">
-            Choose a synthesized chime or upload your own audio. Enabling sound
-            plays a preview and unlocks it for timer completion.
+            Focus and break endings always play this ringtone. Enable check-in
+            sounds if you also want a chime when an accountability prompt is
+            ready.
           </p>
           <button
             onClick={async () => {

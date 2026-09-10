@@ -122,7 +122,11 @@ test("deleting records and clearing a journal day preserves focus progress", () 
 });
 import "fake-indexeddb/auto";
 import { transact, restore } from "../data/store";
-import { enableNotifications, alertUser } from "../adapters/browser";
+import {
+  enableNotifications,
+  alertUser,
+  shouldPlayRingtone,
+} from "../adapters/browser";
 const t = (v: string) => Date.parse(v);
 test("clock activation creates only a future checkpoint and exact logged periods", () => {
   const s = defaults();
@@ -354,4 +358,11 @@ test("notification denial and unsupported browsers retain the in-app fallback", 
       Object.defineProperty(globalThis, "Notification", oldNotification);
     else Reflect.deleteProperty(globalThis, "Notification");
   }
+});
+test("timer completion alarms do not depend on optional check-in sounds", () => {
+  const settings = defaults().settings;
+  assert.equal(shouldPlayRingtone(settings), false);
+  assert.equal(shouldPlayRingtone(settings, { forceSound: true }), true);
+  settings.sound = true;
+  assert.equal(shouldPlayRingtone(settings), true);
 });

@@ -73,13 +73,18 @@ export async function previewRingtone(settings: Settings) {
   await unlockAudio(settings.customRingtone);
   await playRingtone(settings);
 }
+export const shouldPlayRingtone = (
+  settings: Settings,
+  options: { forceSound?: boolean } = {},
+) => settings.sound || options.forceSound === true;
 export async function alertUser(
   settings: Settings,
   title: string,
   body: string,
+  options: { forceSound?: boolean } = {},
 ) {
   let soundPlayed = false;
-  if (settings.sound) {
+  if (shouldPlayRingtone(settings, options)) {
     try {
       await playRingtone(settings);
       soundPlayed = true;
