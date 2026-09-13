@@ -1943,8 +1943,63 @@ progress::-webkit-progress-value {
   border-radius: 12px;
   margin: 8px 0;
 }
-.log-photo input {
-  max-width: 100%;
+.photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.photo-actions > button,
+.photo-action,
+.log-photo > button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.photo-action {
+  position: relative;
+  overflow: hidden;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fffdf7;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+.photo-action input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.photo-action:focus-within {
+  outline: 3px solid #ad7d37;
+  outline-offset: 2px;
+}
+.camera-capture {
+  margin-top: 12px;
+}
+.camera-capture video {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+  border: 1px solid #b9c6a5;
+  border-radius: 13px;
+  background: #293326;
+}
+.log-photo small {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.log-photo [role="alert"] {
+  color: #883c26;
+  font-size: 12px;
 }
 .capy-companion {
   padding: 0 38px;
