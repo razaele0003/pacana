@@ -28,14 +28,25 @@ import {
   Maximize2,
   Music,
   Trash2,
+  Plus,
 } from "lucide-react";
-import type { State, Checkpoint, Schedule, Phase } from "../core/model";
+import type {
+  State,
+  Checkpoint,
+  JournalEntry,
+  Schedule,
+  Phase,
+} from "../core/model";
 import {
   activate,
+  addJournalEntry,
   changeTimezone,
   clearDay,
   deleteCheckpoint,
+  deleteJournalEntry,
   end,
+  editJournalEntry,
+  findJournalOverlap,
   logCheckpoint,
   nextPhase,
   pause,
@@ -46,7 +57,7 @@ import {
   resetProgress,
   totalXP,
 } from "../core/engine";
-import { dayKey } from "../core/schedule";
+import { dayKey, localInstant, parts } from "../core/schedule";
 import { transact, restore } from "../data/store";
 import { parseBackup } from "../data/backup";
 import { ringtones, type Ringtone } from "../core/ringtones";
@@ -142,7 +153,10 @@ export default function Pacana() {
     [category, setCategory] = useState("Study"),
     [setup, setSetup] = useState(false),
     [fullscreen, setFullscreen] = useState(false),
-    [editing, setEditing] = useState<Checkpoint | null>(null);
+    [editing, setEditing] = useState<Checkpoint | null>(null),
+    [manualJournal, setManualJournal] = useState<"new" | JournalEntry | null>(
+      null,
+    );
   const [date, setDate] = useState(""),
     [online, setOnline] = useState(true);
   const lastTick = useRef(0),
@@ -252,6 +266,19 @@ export default function Pacana() {
   const todayChecks = state.checkpoints.filter(
     (c) => dayKey(c.end, state.settings.timezone) === today,
   );
+  const journalItems = [
+    ...state.checkpoints
+      .filter(
+        (checkpoint) =>
+          dayKey(checkpoint.end, state.settings.timezone) === selected,
+      )
+      .map((entry) => ({ kind: "check-in" as const, entry })),
+    ...state.journalEntries
+      .filter(
+        (entry) => dayKey(entry.end, state.settings.timezone) === selected,
+      )
+      .map((entry) => ({ kind: "journal" as const, entry })),
+  ].sort((a, b) => a.entry.start - b.entry.start || a.entry.end - b.entry.end);
   const timer = state.timer,
     xp = totalXP(state),
     ms = remaining(state, now),
@@ -817,28 +844,30 @@ export default function Pacana() {
             <section className="card journal-card">
               <div className="section-title">
                 <h2>Your daily timeline</h2>
-                <input
-                  aria-label="Journal date"
-                  type="date"
-                  value={selected}
-                  onChange={(e) => setDate(e.target.value)}
-                />
+                <div className="journal-controls">
+                  <button
+                    className="primary compact"
+                    onClick={() => setManualJournal("new")}
+                  >
+                    <Plus size={16} /> Add journal
+                  </button>
+                  <input
+                    aria-label="Journal date"
+                    type="date"
+                    value={selected}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
+                </div>
               </div>
               <p>
-                Only check-ins and reflections live in your journal. Focus time
-                lives in Progress.
+                Add a note for any open time. Check-ins and manual notes stay
+                separate from Focus time, which lives in Progress.
               </p>
-              {state.checkpoints
-                .filter(
-                  (checkpoint) =>
-                    dayKey(checkpoint.end, state.settings.timezone) ===
-                    selected,
-                )
-                .sort((a, b) => a.end - b.end)
-                .map((checkpoint) => (
-                  <div className="log-row" key={checkpoint.id}>
-                    <span className={"timeline-dot " + checkpoint.status}>
-                      {checkpoint.status === "logged" ? (
+              {journalItems.map(({ kind, entry }) =>
+                kind === "check-in" ? (
+                  <div className="log-row" key={entry.id}>
+                    <span className={"timeline-dot " + entry.status}>
+                      {entry.status === "logged" ? (
                         <Check size={14} />
                       ) : (
                         <Clock3 size={14} />
@@ -846,39 +875,32 @@ export default function Pacana() {
                     </span>
                     <div>
                       <small>
-                        {time(checkpoint.start)} – {time(checkpoint.end)} ·
-                        Check-in
+                        {time(entry.start)} – {time(entry.end)} · Check-in
                       </small>
                       <strong>
-                        {checkpoint.activity ||
-                          (checkpoint.photo
+                        {entry.activity ||
+                          (entry.photo
                             ? "Photo reflection"
-                            : checkpoint.status === "pending"
+                            : entry.status === "pending"
                               ? "Unlogged period"
                               : "Skipped")}
                       </strong>
                       <p>
-                        {checkpoint.category}
-                        {checkpoint.mood && ` · ${checkpoint.mood}`}
+                        {entry.category}
+                        {entry.mood && ` · ${entry.mood}`}
                       </p>
-                      {checkpoint.photo && (
-                        <a
-                          href={checkpoint.photo}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
+                      {entry.photo && (
+                        <a href={entry.photo} target="_blank" rel="noreferrer">
                           <img
                             className="journal-photo"
-                            src={checkpoint.photo}
+                            src={entry.photo}
                             alt="Photo of this activity"
                           />
                         </a>
                       )}
                     </div>
                     <div className="log-actions">
-                      <button onClick={() => setEditing(checkpoint)}>
-                        Edit
-                      </button>
+                      <button onClick={() => setEditing(entry)}>Edit</button>
                       <button
                         className="danger-link"
                         aria-label="Delete check-in"
@@ -888,20 +910,57 @@ export default function Pacana() {
                               "Delete this check-in? Its reflection and XP reward will be removed.",
                             )
                           )
-                            void update((s) =>
-                              deleteCheckpoint(s, checkpoint.id),
-                            );
+                            void update((s) => deleteCheckpoint(s, entry.id));
                         }}
                       >
                         <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
-                ))}
-              {!state.checkpoints.some(
-                (c) => dayKey(c.end, state.settings.timezone) === selected,
-              ) && (
-                <Empty text="No check-ins here yet. Start a rhythm when you want to reflect on your day." />
+                ) : (
+                  <div className="log-row" key={entry.id}>
+                    <span className="timeline-dot logged">
+                      <BookOpen size={14} />
+                    </span>
+                    <div>
+                      <small>
+                        {time(entry.start)} – {time(entry.end)} · Journal
+                      </small>
+                      <strong>{entry.activity || "Photo journal note"}</strong>
+                      <p>
+                        {entry.category}
+                        {entry.mood && ` · ${entry.mood}`}
+                      </p>
+                      {entry.photo && (
+                        <a href={entry.photo} target="_blank" rel="noreferrer">
+                          <img
+                            className="journal-photo"
+                            src={entry.photo}
+                            alt="Photo of this journal entry"
+                          />
+                        </a>
+                      )}
+                    </div>
+                    <div className="log-actions">
+                      <button onClick={() => setManualJournal(entry)}>
+                        Edit
+                      </button>
+                      <button
+                        className="danger-link"
+                        aria-label="Delete journal entry"
+                        onClick={() => {
+                          if (window.confirm("Delete this journal entry?"))
+                            void update((s) => deleteJournalEntry(s, entry.id));
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ),
+              )}
+              {!journalItems.length && (
+                <Empty text="No journal entries here yet. Add a note for an open part of your day." />
               )}
             </section>
           )}
@@ -996,6 +1055,44 @@ export default function Pacana() {
                 )
               )
                 setEditing(null);
+            }}
+          />
+        </Modal>
+      )}
+      {manualJournal && (
+        <Modal
+          title={
+            manualJournal === "new" ? "Add to your journal" : "Edit journal"
+          }
+          close={() => setManualJournal(null)}
+        >
+          <JournalForm
+            state={state}
+            date={selected}
+            entry={manualJournal === "new" ? undefined : manualJournal}
+            onOpenOverlap={(overlap) => {
+              if (overlap.kind === "check-in") {
+                const checkpoint = state.checkpoints.find(
+                  (entry) => entry.id === overlap.id,
+                );
+                if (checkpoint) setEditing(checkpoint);
+                setManualJournal(null);
+                return;
+              }
+              const entry = state.journalEntries.find(
+                (journal) => journal.id === overlap.id,
+              );
+              if (entry) setManualJournal(entry);
+            }}
+            save={async (entry) => {
+              if (
+                await update((s) => {
+                  if (manualJournal === "new")
+                    addJournalEntry(s, entry, Date.now());
+                  else editJournalEntry(s, manualJournal.id, entry);
+                })
+              )
+                setManualJournal(null);
             }}
           />
         </Modal>
@@ -1380,6 +1477,158 @@ function LogForm({
         </button>
         <button type="button" onClick={() => save("", category, mood, true)}>
           Skip this period
+        </button>
+      </div>
+    </form>
+  );
+}
+type JournalDraft = Omit<JournalEntry, "id" | "createdAt">;
+function JournalForm({
+  state,
+  date,
+  entry,
+  save,
+  onOpenOverlap,
+}: {
+  state: State;
+  date: string;
+  entry?: JournalEntry;
+  save: (entry: JournalDraft) => void;
+  onOpenOverlap: (
+    overlap: Exclude<ReturnType<typeof findJournalOverlap>, undefined>,
+  ) => void;
+}) {
+  const clock = (timestamp: number) => {
+    const value = parts(timestamp, state.settings.timezone);
+    return `${String(value.hour).padStart(2, "0")}:${String(value.minute).padStart(2, "0")}`;
+  };
+  const [start, setStart] = useState(entry ? clock(entry.start) : "09:00"),
+    [end, setEnd] = useState(entry ? clock(entry.end) : "10:00"),
+    [activity, setActivity] = useState(entry?.activity ?? ""),
+    [category, setCategory] = useState(entry?.category ?? "Study"),
+    [mood, setMood] = useState(entry?.mood ?? ""),
+    [photo, setPhoto] = useState(entry?.photo),
+    [busy, setBusy] = useState(false),
+    [problem, setProblem] = useState<
+      ReturnType<typeof findJournalOverlap> | "time" | "note" | null
+    >(null);
+  const toInstant = (value: string) => {
+    const [year, month, day] = date.split("-").map(Number);
+    const [hour, minute] = value.split(":").map(Number);
+    return localInstant(
+      year,
+      month,
+      day,
+      hour,
+      minute,
+      state.settings.timezone,
+    );
+  };
+  const overlapText =
+    problem && typeof problem === "object"
+      ? problem.kind === "check-in"
+        ? "This time already has a check-in. Edit it instead."
+        : "This time already has a journal entry. Edit it instead."
+      : problem === "time"
+        ? "Choose an end time after the start time."
+        : problem === "note"
+          ? "Add a journal note or photo."
+          : "";
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        const startAt = toInstant(start),
+          endAt = toInstant(end);
+        if (startAt === null || endAt === null || endAt <= startAt) {
+          setProblem("time");
+          return;
+        }
+        if (!activity.trim() && !photo) {
+          setProblem("note");
+          return;
+        }
+        const overlap = findJournalOverlap(state, startAt, endAt, entry?.id);
+        if (overlap) {
+          setProblem(overlap);
+          return;
+        }
+        setProblem(null);
+        save({ start: startAt, end: endAt, activity, category, mood, photo });
+      }}
+    >
+      {problem && (
+        <div className="form-error" role="alert">
+          <span>{overlapText}</span>
+          {typeof problem === "object" && (
+            <button type="button" onClick={() => onOpenOverlap(problem)}>
+              Edit existing entry
+            </button>
+          )}
+        </div>
+      )}
+      <div className="form-grid">
+        <label className="field">
+          Start time
+          <input
+            required
+            type="time"
+            value={start}
+            onChange={(event) => {
+              setStart(event.target.value);
+              setProblem(null);
+            }}
+          />
+        </label>
+        <label className="field">
+          End time
+          <input
+            required
+            type="time"
+            value={end}
+            onChange={(event) => {
+              setEnd(event.target.value);
+              setProblem(null);
+            }}
+          />
+        </label>
+      </div>
+      <p className="muted">
+        {date} · {state.settings.timezone}
+      </p>
+      <label className="field">
+        What happened?
+        <textarea
+          autoFocus
+          required={!photo}
+          maxLength={10000}
+          placeholder="A few words about this part of your day…"
+          value={activity}
+          onChange={(event) => {
+            setActivity(event.target.value);
+            setProblem(null);
+          }}
+        />
+      </label>
+      <LogPhoto value={photo} onChange={setPhoto} onBusy={setBusy} />
+      <div className="form-grid">
+        <Category value={category} onChange={setCategory} />
+        <label className="field">
+          How did it feel? (optional)
+          <select
+            value={mood}
+            onChange={(event) => setMood(event.target.value)}
+          >
+            <option value="">No mood selected</option>
+            {["Low energy", "Okay", "Good", "Focused"].map((value) => (
+              <option key={value}>{value}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="actions">
+        <button className="primary" disabled={busy}>
+          <Check size={17} /> {entry ? "Save changes" : "Add journal"}
         </button>
       </div>
     </form>

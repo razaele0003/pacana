@@ -1,4 +1,4 @@
-import { defaults, type State, type Phase } from "./model";
+import { defaults, type JournalEntry, type Phase, type State } from "./model";
 import { dayKey, nextClock } from "./schedule";
 export { defaults };
 export const remaining = (s: State, now: number) =>
@@ -186,12 +186,81 @@ export function deleteCheckpoint(s: State, id: string) {
   s.checkpoints.splice(index, 1);
   delete s.rewards[`check:${id}`];
 }
+export type JournalOverlap =
+  { kind: "check-in"; id: string } | { kind: "journal"; id: string };
+export function findJournalOverlap(
+  s: State,
+  start: number,
+  end: number,
+  ignoreId?: string,
+): JournalOverlap | undefined {
+  const overlaps = (entry: { id: string; start: number; end: number }) =>
+    entry.id !== ignoreId && start < entry.end && end > entry.start;
+  const checkpoint = s.checkpoints.find(overlaps);
+  if (checkpoint) return { kind: "check-in", id: checkpoint.id };
+  const journal = s.journalEntries.find(overlaps);
+  return journal ? { kind: "journal", id: journal.id } : undefined;
+}
+function assertJournalEntry(
+  s: State,
+  start: number,
+  end: number,
+  activity: string,
+  photo: string | undefined,
+  ignoreId?: string,
+) {
+  if (end <= start) throw new Error("End time must be after start time.");
+  if (!activity.trim() && !photo)
+    throw new Error("Add a journal note or photo.");
+  if (findJournalOverlap(s, start, end, ignoreId))
+    throw new Error(
+      "That time is already recorded. Edit the existing entry instead.",
+    );
+}
+export function addJournalEntry(
+  s: State,
+  entry: Omit<JournalEntry, "id" | "createdAt">,
+  now: number,
+) {
+  assertJournalEntry(s, entry.start, entry.end, entry.activity, entry.photo);
+  s.journalEntries.push({
+    ...entry,
+    id: crypto.randomUUID(),
+    activity: entry.activity.trim(),
+    createdAt: now,
+  });
+}
+export function editJournalEntry(
+  s: State,
+  id: string,
+  entry: Omit<JournalEntry, "id" | "createdAt">,
+) {
+  const journal = s.journalEntries.find((x) => x.id === id);
+  if (!journal) throw new Error("Journal entry no longer exists.");
+  assertJournalEntry(
+    s,
+    entry.start,
+    entry.end,
+    entry.activity,
+    entry.photo,
+    id,
+  );
+  Object.assign(journal, { ...entry, activity: entry.activity.trim() });
+}
+export function deleteJournalEntry(s: State, id: string) {
+  const index = s.journalEntries.findIndex((entry) => entry.id === id);
+  if (index < 0) throw new Error("Journal entry no longer exists.");
+  s.journalEntries.splice(index, 1);
+}
 export function clearDay(s: State, date: string, timezone: string) {
   for (const checkpoint of s.checkpoints)
     if (dayKey(checkpoint.end, timezone) === date)
       delete s.rewards[`check:${checkpoint.id}`];
   s.checkpoints = s.checkpoints.filter(
     (checkpoint) => dayKey(checkpoint.end, timezone) !== date,
+  );
+  s.journalEntries = s.journalEntries.filter(
+    (entry) => dayKey(entry.end, timezone) !== date,
   );
 }
 export function resetProgress(s: State) {
@@ -200,6 +269,7 @@ export function resetProgress(s: State) {
   s.completedCycle = 0;
   s.sessions = [];
   s.checkpoints = [];
+  s.journalEntries = [];
   s.rewards = {};
 }
 export function focusTotal(s: State, from: number, to: number) {

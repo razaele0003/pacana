@@ -65,6 +65,16 @@ export type Checkpoint = {
   loggedAt?: number;
   photo?: string;
 };
+export type JournalEntry = {
+  id: string;
+  start: number;
+  end: number;
+  activity: string;
+  category: string;
+  mood: string;
+  createdAt: number;
+  photo?: string;
+};
 export type State = {
   version: 1;
   settings: Settings;
@@ -75,6 +85,7 @@ export type State = {
   interval: number;
   run: Run | null;
   checkpoints: Checkpoint[];
+  journalEntries: JournalEntry[];
   rewards: Record<string, number>;
   revision: number;
 };
@@ -106,6 +117,7 @@ export const defaults = (timezone = "Asia/Manila"): State => ({
   interval: 10,
   run: null,
   checkpoints: [],
+  journalEntries: [],
   rewards: {},
   revision: 0,
 });

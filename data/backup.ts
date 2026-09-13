@@ -134,6 +134,23 @@ const schema = z.object({
         .refine((c) => c.end > c.start),
     )
     .max(100000),
+  journalEntries: z
+    .array(
+      z
+        .object({
+          id: z.string(),
+          start: timestamp,
+          end: timestamp,
+          activity: z.string().max(10000),
+          category: z.string().max(100),
+          mood: z.string().max(100),
+          createdAt: timestamp,
+          photo,
+        })
+        .refine((entry) => entry.end > entry.start),
+    )
+    .max(100000)
+    .default([]),
   rewards: z.record(z.number().int().nonnegative()),
 });
 export function parseBackup(input: unknown): State {
@@ -145,9 +162,16 @@ export function parseBackup(input: unknown): State {
   const s = result.data;
   if (
     new Set(s.sessions.map((x) => x.id)).size !== s.sessions.length ||
-    new Set(s.checkpoints.map((x) => x.id)).size !== s.checkpoints.length
+    new Set(s.checkpoints.map((x) => x.id)).size !== s.checkpoints.length ||
+    new Set(s.journalEntries.map((x) => x.id)).size !== s.journalEntries.length
   )
     throw new Error("Backup contains duplicate records.");
+  const journalIntervals = [...s.checkpoints, ...s.journalEntries].sort(
+    (a, b) => a.start - b.start || a.end - b.end,
+  );
+  for (let index = 1; index < journalIntervals.length; index++)
+    if (journalIntervals[index].start < journalIntervals[index - 1].end)
+      throw new Error("Backup contains overlapping journal time.");
   for (const [key, value] of Object.entries(s.rewards)) {
     if (key.startsWith("focus:")) {
       const session = s.sessions.find((x) => `focus:${x.id}` === key);

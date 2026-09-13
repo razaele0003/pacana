@@ -163,6 +163,12 @@ select {
 .primary:hover {
   background: var(--green-dark);
 }
+.primary.compact {
+  min-height: 40px;
+  padding: 9px 13px;
+  border-radius: 11px;
+  font-size: 12px;
+}
 .brand {
   display: flex;
   align-items: center;
@@ -893,6 +899,11 @@ select {
   font-size: 13px;
   margin-bottom: 20px;
 }
+.journal-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .log-row {
   display: flex;
   align-items: center;
@@ -1010,6 +1021,25 @@ progress::-webkit-progress-value {
   gap: 10px;
   flex-wrap: wrap;
   margin-top: 16px;
+}
+.form-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 11px 12px;
+  border: 1px solid #dfa88e;
+  border-radius: 12px;
+  background: #fff0e7;
+  color: #883c26;
+  font-size: 13px;
+}
+.form-error button {
+  flex-shrink: 0;
+  border-color: #d39073;
+  background: #fffaf5;
+  color: #883c26;
 }
 .log-actions {
   display: flex;
@@ -1546,6 +1576,14 @@ progress::-webkit-progress-value {
   }
   .journal-card .section-title {
     flex-wrap: wrap;
+  }
+  .journal-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .form-error {
+    align-items: flex-start;
+    flex-direction: column;
   }
   .completion {
     flex-wrap: wrap;

@@ -15,6 +15,9 @@ import {
   changeTimezone,
   clearDay,
   deleteCheckpoint,
+  addJournalEntry,
+  editJournalEntry,
+  findJournalOverlap,
   deleteSession,
   resetProgress,
 } from "../core/engine";
@@ -47,7 +50,9 @@ test("photo-only reflections restore completely and edits do not duplicate XP", 
 test("ringtone preferences preserve old journals and round-trip through backup", () => {
   const old = JSON.parse(JSON.stringify(defaults()));
   delete old.settings.ringtone;
+  delete old.journalEntries;
   assert.equal(parseBackup(old).settings.ringtone, "classic");
+  assert.deepEqual(parseBackup(old).journalEntries, []);
   for (const ringtone of [
     "classic",
     "woodland",
@@ -119,6 +124,67 @@ test("deleting records and clearing a journal day preserves focus progress", () 
   assert.equal(totalXP(state), 1);
   resetProgress(state);
   assert.deepEqual(state.rewards, {});
+});
+test("manual journal entries occupy open time and require edits for overlaps", () => {
+  const state = defaults("UTC");
+  addJournalEntry(
+    state,
+    {
+      start: 60_000,
+      end: 120_000,
+      activity: "Planned the day",
+      category: "Work",
+      mood: "Focused",
+    },
+    1,
+  );
+  assert.equal(state.journalEntries.length, 1);
+  assert.deepEqual(findJournalOverlap(state, 90_000, 150_000), {
+    kind: "journal",
+    id: state.journalEntries[0].id,
+  });
+  assert.throws(
+    () =>
+      addJournalEntry(
+        state,
+        {
+          start: 90_000,
+          end: 150_000,
+          activity: "Overlaps",
+          category: "Work",
+          mood: "",
+        },
+        2,
+      ),
+    /already recorded/,
+  );
+  state.checkpoints.push({
+    id: "check-in",
+    runId: "run",
+    start: 180_000,
+    end: 240_000,
+    status: "pending",
+    activity: "",
+    category: "Study",
+    mood: "",
+  });
+  assert.deepEqual(findJournalOverlap(state, 200_000, 210_000), {
+    kind: "check-in",
+    id: "check-in",
+  });
+  editJournalEntry(state, state.journalEntries[0].id, {
+    start: 120_000,
+    end: 180_000,
+    activity: "Moved the plan",
+    category: "Work",
+    mood: "Good",
+  });
+  assert.equal(state.journalEntries[0].activity, "Moved the plan");
+  assert.equal(Object.keys(state.rewards).length, 0);
+  assert.equal(
+    parseBackup(JSON.parse(JSON.stringify(state))).journalEntries[0].activity,
+    "Moved the plan",
+  );
 });
 import "fake-indexeddb/auto";
 import { transact, restore } from "../data/store";
