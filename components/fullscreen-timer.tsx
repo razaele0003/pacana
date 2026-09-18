@@ -1,9 +1,84 @@
 "use client";
 import WanderingCapybara from "./wandering-capybara";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Leaf, Pause, Play, Square, X } from "lucide-react";
 import type { State } from "../core/model";
 import { nextPhase, remaining } from "../core/engine";
+
+function ScoreboardTile({ digit }: { digit: string }) {
+  const [current, setCurrent] = useState(digit);
+  const [previous, setPrevious] = useState(digit);
+  const [flipping, setFlipping] = useState(false);
+  const [flipKey, setFlipKey] = useState(0);
+
+  useEffect(() => {
+    if (digit !== current) {
+      setPrevious(current);
+      setCurrent(digit);
+      setFlipping(true);
+      setFlipKey((k) => k + 1);
+
+      const timer = setTimeout(() => {
+        setFlipping(false);
+      }, 550);
+
+      return () => clearTimeout(timer);
+    }
+  }, [digit, current]);
+
+  return (
+    <div className="scoreboard-tile" aria-hidden="true">
+      {/* Physical scoreboard rings at the top */}
+      <div className="scoreboard-rings">
+        <div className="scoreboard-ring left">
+          <div className="scoreboard-loop" />
+          <div className="scoreboard-hole" />
+        </div>
+        <div className="scoreboard-ring right">
+          <div className="scoreboard-loop" />
+          <div className="scoreboard-hole" />
+        </div>
+      </div>
+
+      <div className="scoreboard-card">
+        {/* Top half static: shows current digit */}
+        <div className="scoreboard-half scoreboard-half-top">
+          <span className="scoreboard-digit-val">{current}</span>
+        </div>
+
+        {/* Bottom half static: shows previous digit during flip, or current once settled */}
+        <div className="scoreboard-half scoreboard-half-bottom">
+          <span className="scoreboard-digit-val">
+            {flipping ? previous : current}
+          </span>
+          {flipping && <div className="scoreboard-shadow-bottom" />}
+        </div>
+
+        {/* 3D Flipping flaps */}
+        {flipping && (
+          <div className="scoreboard-flip-layer" key={flipKey}>
+            {/* Top flap: rotates down from 0 to -90 deg, showing previous digit */}
+            <div className="scoreboard-flap scoreboard-flap-top">
+              <span className="scoreboard-digit-val">{previous}</span>
+              <div className="scoreboard-shadow-top" />
+            </div>
+
+            {/* Bottom flap: rotates down from 90 to 0 deg with bounce, showing current digit */}
+            <div className="scoreboard-flap scoreboard-flap-bottom">
+              <span className="scoreboard-digit-val">{current}</span>
+              <div className="scoreboard-shadow-bottom-flap" />
+            </div>
+          </div>
+        )}
+
+        {/* Center horizontal split seam & notch accents */}
+        <div className="scoreboard-divider" />
+        <div className="scoreboard-notch left" />
+        <div className="scoreboard-notch right" />
+      </div>
+    </div>
+  );
+}
 
 export default function FullscreenTimer({
   state,
@@ -107,11 +182,7 @@ export default function FullscreenTimer({
                     .padStart(2, "0")
                     .split("")
                     .map((digit, j) => (
-                      <span className="clock-tile" key={j}>
-                        <span className="clock-number" key={digit}>
-                          {digit}
-                        </span>
-                      </span>
+                      <ScoreboardTile digit={digit} key={j} />
                     ))}
                 </div>
                 <span className="clock-unit" aria-hidden="true">

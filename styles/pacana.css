@@ -1757,43 +1757,273 @@ progress::-webkit-progress-value {
 .clock-section {
   position: relative;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .clock-group {
   display: flex;
   gap: clamp(4px, 1vw, 12px);
 }
-.clock-tile {
-  display: grid;
-  place-items: center;
+/* Physical Scoreboard Flip Clock Display */
+.scoreboard-tile {
   position: relative;
-  background: linear-gradient(#f3efdf 49.5%, #dedacc 50%, #eeeada 50.7%);
-  color: #273c2e;
-  width: clamp(44px, 12vw, 160px);
-  height: clamp(74px, 17vw, 220px);
-  border-radius: clamp(9px, 1.5vw, 20px);
-  box-shadow:
-    0 8px 0 #a9b098,
-    0 20px 45px #0004;
-  perspective: 500px;
-  overflow: hidden;
+  width: clamp(50px, 11vw, 152px);
+  height: clamp(86px, 16.5vw, 216px);
+  perspective: 800px;
+  user-select: none;
 }
-.clock-tile:after {
-  content: "";
+
+/* Scoreboard Top Binder Rings */
+.scoreboard-rings {
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: clamp(20px, 3vw, 32px);
+  display: flex;
+  justify-content: space-between;
+  padding: 0 clamp(10px, 2vw, 26px);
+  z-index: 12;
+  pointer-events: none;
+}
+.scoreboard-ring {
+  position: relative;
+  width: clamp(7px, 1.2vw, 13px);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.scoreboard-loop {
+  width: 100%;
+  height: clamp(14px, 2vw, 22px);
+  border-radius: clamp(4px, 0.7vw, 7px) clamp(4px, 0.7vw, 7px) 2px 2px;
+  background: linear-gradient(135deg, #18241b 0%, #3a4c3e 50%, #151e17 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+.scoreboard-hole {
+  width: clamp(5px, 0.9vw, 9px);
+  height: clamp(5px, 0.9vw, 9px);
+  border-radius: 50%;
+  background: #19271d;
+  margin-top: -3px;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.75);
+}
+
+/* Scoreboard Card Board */
+.scoreboard-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: clamp(9px, 1.5vw, 18px);
+  box-shadow:
+    0 8px 0 #8e977d,
+    0 18px 40px rgba(0, 0, 0, 0.4);
+  transform-style: preserve-3d;
+}
+
+/* Halves (Top & Bottom) */
+.scoreboard-half {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50%;
+  overflow: hidden;
+  color: #243829;
+}
+.scoreboard-half-top {
+  top: 0;
+  border-top-left-radius: clamp(9px, 1.5vw, 18px);
+  border-top-right-radius: clamp(9px, 1.5vw, 18px);
+  background: linear-gradient(180deg, #f6f3e5 0%, #ebe5d3 100%);
+  box-shadow: inset 0 -1px 0 rgba(36, 56, 41, 0.2);
+}
+.scoreboard-half-bottom {
+  top: 50%;
+  border-bottom-left-radius: clamp(9px, 1.5vw, 18px);
+  border-bottom-right-radius: clamp(9px, 1.5vw, 18px);
+  background: linear-gradient(180deg, #e3ddcc 0%, #d8d1be 100%);
+  box-shadow: inset 0 1px 0 rgba(36, 56, 41, 0.15);
+}
+
+/* Digit Typography inside Halves & Flaps */
+.scoreboard-digit-val {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 200%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-family: inherit;
+  font-size: clamp(56px, 11.5vw, 150px);
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.scoreboard-half-top .scoreboard-digit-val,
+.scoreboard-flap-top .scoreboard-digit-val {
+  top: 0;
+}
+.scoreboard-half-bottom .scoreboard-digit-val,
+.scoreboard-flap-bottom .scoreboard-digit-val {
+  top: -100%;
+}
+
+/* Center Horizontal Divider Groove & Notch Accents */
+.scoreboard-divider {
   position: absolute;
   left: 0;
   right: 0;
   top: 50%;
   height: 1px;
-  background: #263e2924;
+  background: rgba(31, 48, 35, 0.25);
+  transform: translateY(-50%);
+  z-index: 6;
   pointer-events: none;
 }
-.clock-number {
-  font-size: clamp(55px, 12vw, 158px);
-  font-weight: 900;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  animation: clock-tick 0.22s ease-out;
-  transform-origin: center;
+.scoreboard-notch {
+  position: absolute;
+  top: 50%;
+  width: clamp(4px, 0.6vw, 8px);
+  height: clamp(8px, 1.2vw, 16px);
+  transform: translateY(-50%);
+  background: #1f3323; /* blends seamlessly with fullscreen backdrop */
+  z-index: 7;
+}
+.scoreboard-notch.left {
+  left: 0;
+  border-radius: 0 clamp(4px, 0.6vw, 8px) clamp(4px, 0.6vw, 8px) 0;
+}
+.scoreboard-notch.right {
+  right: 0;
+  border-radius: clamp(4px, 0.6vw, 8px) 0 0 clamp(4px, 0.6vw, 8px);
+}
+
+/* 3D Flipping Flaps Layer */
+.scoreboard-flip-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Top Flap (rotates from 0deg down to -90deg) */
+.scoreboard-flap-top {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 50%;
+  overflow: hidden;
+  border-top-left-radius: clamp(9px, 1.5vw, 18px);
+  border-top-right-radius: clamp(9px, 1.5vw, 18px);
+  background: linear-gradient(180deg, #f6f3e5 0%, #ebe5d3 100%);
+  box-shadow: inset 0 -1px 0 rgba(36, 56, 41, 0.2);
+  color: #243829;
+  transform-origin: bottom center;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  animation: scoreboard-flip-top-fall 0.24s ease-in forwards;
+}
+
+/* Bottom Flap (rotates from 90deg down to 0deg with mechanical bounce) */
+.scoreboard-flap-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 50%;
+  overflow: hidden;
+  border-bottom-left-radius: clamp(9px, 1.5vw, 18px);
+  border-bottom-right-radius: clamp(9px, 1.5vw, 18px);
+  background: linear-gradient(180deg, #e3ddcc 0%, #d8d1be 100%);
+  box-shadow: inset 0 1px 0 rgba(36, 56, 41, 0.15);
+  color: #243829;
+  transform-origin: top center;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  transform: rotateX(90deg);
+  animation: scoreboard-flap-bottom-land 0.26s cubic-bezier(0.18, 0.89, 0.32, 1.25) 0.22s forwards;
+}
+
+/* Lighting Shadows */
+.scoreboard-shadow-top {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.45) 100%);
+  opacity: 0;
+  animation: scoreboard-shadow-darken 0.24s ease-in forwards;
+}
+.scoreboard-shadow-bottom {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  animation: scoreboard-shadow-pulse 0.48s ease-in-out forwards;
+}
+.scoreboard-shadow-bottom-flap {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0) 100%);
+  opacity: 1;
+  animation: scoreboard-shadow-lighten 0.26s cubic-bezier(0.18, 0.89, 0.32, 1.25) 0.22s forwards;
+}
+
+/* Scoreboard Flip Keyframes */
+@keyframes scoreboard-flip-top-fall {
+  0% {
+    transform: rotateX(0deg);
+  }
+  100% {
+    transform: rotateX(-90deg);
+  }
+}
+
+@keyframes scoreboard-flap-bottom-land {
+  0% {
+    transform: rotateX(90deg);
+  }
+  75% {
+    transform: rotateX(-5deg); /* physical flap over-swing / slap bounce */
+  }
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+
+@keyframes scoreboard-shadow-darken {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes scoreboard-shadow-lighten {
+  0% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes scoreboard-shadow-pulse {
+  0% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.32;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 .clock-unit {
   display: block;
@@ -1802,11 +2032,13 @@ progress::-webkit-progress-value {
   letter-spacing: 3px;
   text-transform: uppercase;
   color: #b9c9ac;
+  text-align: center;
 }
 .clock-colon {
   position: absolute;
-  right: calc(100% + clamp(5px, 1.2vw, 21px));
-  top: clamp(10px, 3vw, 40px);
+  right: calc(100% + clamp(6px, 1.2vw, 24px));
+  top: 50%;
+  transform: translateY(-50%);
   font-size: clamp(35px, 7vw, 84px);
   line-height: 1;
   color: #a8ba92;
@@ -1897,16 +2129,18 @@ progress::-webkit-progress-value {
   .digital-clock.with-hours {
     gap: 20px;
   }
-  .with-hours .clock-tile {
-    width: 10vw;
-    height: 17vw;
+  .with-hours .scoreboard-tile {
+    width: clamp(38px, 9vw, 96px);
+    height: clamp(66px, 14vw, 150px);
   }
-  .with-hours .clock-number {
-    font-size: 12vw;
+  .with-hours .scoreboard-digit-val {
+    font-size: clamp(42px, 9.5vw, 105px);
+    line-height: 1;
   }
   .with-hours .clock-colon {
-    font-size: 30px;
-    top: 6px;
+    font-size: clamp(24px, 5vw, 50px);
+    top: 50%;
+    transform: translateY(-50%);
     right: calc(100% + 5px);
   }
   .clock-unit {
@@ -1923,7 +2157,12 @@ progress::-webkit-progress-value {
 }
 @media (prefers-reduced-motion: reduce) {
   .fullscreen-inner,
-  .clock-number {
+  .clock-number,
+  .scoreboard-flap-top,
+  .scoreboard-flap-bottom,
+  .scoreboard-shadow-top,
+  .scoreboard-shadow-bottom,
+  .scoreboard-shadow-bottom-flap {
     animation: none !important;
   }
 }
