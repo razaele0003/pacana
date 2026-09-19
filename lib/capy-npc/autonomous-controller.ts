@@ -101,9 +101,67 @@ export function useAutonomousCapy({
   const modeRef = useRef<CompanionMode>(mode);
   modeRef.current = mode;
 
+  const actionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const sleepTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastMovedPosRef = useRef<Point>({ x: 0, y: 0 });
+  const stalledFramesCountRef = useRef<number>(0);
+
   const changeMode = useCallback((newMode: CompanionMode) => {
     modeRef.current = newMode;
     setMode(newMode);
+
+    if (actionTimeoutRef.current) {
+      clearTimeout(actionTimeoutRef.current);
+      actionTimeoutRef.current = null;
+    }
+
+    // Safety fallback timeouts: guarantee Capy never gets permanently stuck in transient modes
+    if (newMode === "eating") {
+      actionTimeoutRef.current = setTimeout(() => {
+        actionTimeoutRef.current = null;
+        if (modeRef.current === "eating") {
+          setActiveLeaf(null);
+          currentGoalRef.current = "wander";
+          modeRef.current = "wander";
+          setMode("wander");
+          setPose("walk");
+          planNextWanderRef.current();
+        }
+      }, 2500);
+    } else if (newMode === "focusing") {
+      actionTimeoutRef.current = setTimeout(() => {
+        actionTimeoutRef.current = null;
+        if (modeRef.current === "focusing") {
+          currentGoalRef.current = "wander";
+          modeRef.current = "wander";
+          setMode("wander");
+          setPose("walk");
+          planNextWanderRef.current();
+        }
+      }, 2500);
+    } else if (newMode === "reading" || newMode === "thinking") {
+      actionTimeoutRef.current = setTimeout(() => {
+        actionTimeoutRef.current = null;
+        if (modeRef.current === "reading" || modeRef.current === "thinking") {
+          currentGoalRef.current = "wander";
+          modeRef.current = "wander";
+          setMode("wander");
+          setPose("walk");
+          planNextWanderRef.current();
+        }
+      }, 3500);
+    } else if (newMode === "waking") {
+      actionTimeoutRef.current = setTimeout(() => {
+        actionTimeoutRef.current = null;
+        if (modeRef.current === "waking") {
+          currentGoalRef.current = "wander";
+          modeRef.current = "wander";
+          setMode("wander");
+          setPose("walk");
+          planNextWanderRef.current();
+        }
+      }, 2500);
+    }
   }, []);
 
   const currentGoalRef = useRef<CapyGoalType>("wander");
@@ -323,6 +381,19 @@ export function useAutonomousCapy({
       refreshObstacles();
       const currentPos = posRef.current;
 
+      // If Capy is already within eating distance (36px) of the tree, start eating immediately!
+      const distToTree = Math.hypot(readyLeaf.x - currentPos.x, readyLeaf.y - currentPos.y);
+      if (distToTree <= 36) {
+        if (readyLeaf.x !== currentPos.x) {
+          setFacing(readyLeaf.x > currentPos.x ? "right" : "left");
+        }
+        waypointsRef.current = [];
+        currentGoalRef.current = "eat_snack";
+        changeMode("eating");
+        setPose("eating");
+        return;
+      }
+
       const path: Point[] = [{ x: readyLeaf.x, y: readyLeaf.y }];
 
       if (path.length > 0) {
@@ -474,10 +545,10 @@ export function useAutonomousCapy({
     refreshObstacles();
     const vp = viewportRef.current;
 
-    const minX = 40;
-    const maxX = Math.max(minX + 50, vp.width - 90);
-    const minY = 60;
-    const maxY = Math.max(minY + 50, vp.height - 110);
+    const minX = 48;
+    const maxX = Math.max(minX + 50, vp.width - 120);
+    const minY = 72;
+    const maxY = Math.max(minY + 50, vp.height - 130);
 
     const target: Point = {
       x: Math.round(minX + Math.random() * (maxX - minX)),
@@ -611,6 +682,10 @@ export function useAutonomousCapy({
 
   // Rest & Waking System
   const wakeUp = useCallback(() => {
+    if (sleepTimerRef.current) {
+      clearTimeout(sleepTimerRef.current);
+      sleepTimerRef.current = null;
+    }
     if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
     changeMode("waking");
     setPose("stretch"); // 10-frame stretch wakeup from Stretch wakeup.png
@@ -622,6 +697,10 @@ export function useAutonomousCapy({
       wakeUp();
     } else {
       // Enter resting state indefinitely
+      if (sleepTimerRef.current) {
+        clearTimeout(sleepTimerRef.current);
+        sleepTimerRef.current = null;
+      }
       if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
       waypointsRef.current = [];
       currentGoalRef.current = "rest";
@@ -1004,24 +1083,92 @@ export function useAutonomousCapy({
         }
       }
 
+      const isWalkingMode =
+        currentMode === "wander" ||
+        currentMode === "walk_to_focus" ||
+        currentMode === "walk_to_snack" ||
+        currentMode === "walk_home";
+
+      // Stalled movement detector:
+      // If Capy is supposed to be walking but has moved less than 2px over 75 frames (~2.5s), handle or recover!
+      if (isWalkingMode && !isDraggingRef.current) {
+        const movedDist = Math.hypot(
+          cur.x - lastMovedPosRef.current.x,
+          cur.y - lastMovedPosRef.current.y
+        );
+        if (movedDist < 2) {
+          stalledFramesCountRef.current++;
+          if (stalledFramesCountRef.current >= 75) {
+            stalledFramesCountRef.current = 0;
+            if (currentMode === "walk_to_snack") {
+              if (activeLeafRef.current) {
+                const distToLeaf = Math.hypot(
+                  activeLeafRef.current.x - cur.x,
+                  activeLeafRef.current.y - cur.y
+                );
+                if (distToLeaf <= 65) {
+                  changeMode("eating");
+                  setPose("eating");
+                } else {
+                  setActiveLeaf(null);
+                  waypointsRef.current = [];
+                  currentGoalRef.current = "wander";
+                  changeMode("wander");
+                  setPose("walk");
+                  planNextWander();
+                }
+              } else {
+                waypointsRef.current = [];
+                currentGoalRef.current = "wander";
+                changeMode("wander");
+                setPose("walk");
+                planNextWander();
+              }
+            } else if (currentMode === "walk_to_focus") {
+              changeMode("focusing");
+              setPose("focus");
+            } else if (currentMode === "walk_home") {
+              if (onArrivedRef.current) {
+                const cb = onArrivedRef.current;
+                onArrivedRef.current = null;
+                cb();
+              } else {
+                waypointsRef.current = [];
+                changeMode("wander");
+                setPose("walk");
+                planNextWander();
+              }
+            } else {
+              waypointsRef.current = [];
+              planNextWander();
+            }
+          }
+        } else {
+          lastMovedPosRef.current = { x: cur.x, y: cur.y };
+          stalledFramesCountRef.current = 0;
+        }
+      } else {
+        lastMovedPosRef.current = { x: cur.x, y: cur.y };
+        stalledFramesCountRef.current = 0;
+      }
+
       if (
-        (currentMode === "wander" ||
-          currentMode === "walk_to_focus" ||
-          currentMode === "walk_to_snack" ||
-          currentMode === "walk_home") &&
+        isWalkingMode &&
         waypointsRef.current.length > 0 &&
         !isDraggingRef.current
       ) {
         const nextTarget = waypointsRef.current[0];
-        const dx = nextTarget.x - cur.x;
-        const dy = nextTarget.y - cur.y;
+        const targetX = Math.max(minX, Math.min(maxX, nextTarget.x));
+        const targetY = Math.max(minY, Math.min(maxY, nextTarget.y));
+        const dx = targetX - cur.x;
+        const dy = targetY - cur.y;
         const dist = Math.hypot(dx, dy);
 
         // Turn facing direction smoothly based on movement vector
         if (Math.abs(dx) > 0.5) {
           setFacing(dx > 0 ? "right" : "left");
         } else if (waypointsRef.current.length > 1) {
-          const futureDx = waypointsRef.current[1].x - cur.x;
+          const futureDx = Math.max(minX, Math.min(maxX, waypointsRef.current[1].x)) - cur.x;
           if (Math.abs(futureDx) > 0.5) {
             setFacing(futureDx > 0 ? "right" : "left");
           }
@@ -1035,11 +1182,14 @@ export function useAutonomousCapy({
             : walkSpeed;
         const stepDist = effectiveSpeed * dt;
 
-        if (dist <= Math.max(stepDist, 10)) {
+        const arrivalThreshold =
+          currentMode === "walk_to_snack" ? 32 : currentMode === "walk_to_focus" ? 20 : 12;
+
+        if (dist <= Math.max(stepDist, arrivalThreshold)) {
           // Reached this waypoint
           const reached: Point = {
-            x: Math.max(minX, Math.min(maxX, nextTarget.x)),
-            y: Math.max(minY, Math.min(maxY, nextTarget.y)),
+            x: targetX,
+            y: targetY,
           };
           waypointsRef.current.shift();
           posRef.current = reached;
@@ -1049,7 +1199,7 @@ export function useAutonomousCapy({
           // If there is another waypoint queued, face towards it
           if (waypointsRef.current.length > 0) {
             const nextWp = waypointsRef.current[0];
-            const nextDx = nextWp.x - reached.x;
+            const nextDx = Math.max(minX, Math.min(maxX, nextWp.x)) - reached.x;
             if (Math.abs(nextDx) > 0.5) {
               setFacing(nextDx > 0 ? "right" : "left");
             }
@@ -1094,8 +1244,9 @@ export function useAutonomousCapy({
                   // 2. Cozy sleep nap with Zzz, then wake up and stretch!
                   setPose("sleep");
                   changeMode("resting");
-                  transitionTimerRef.current = setTimeout(() => {
-                    transitionTimerRef.current = null;
+                  if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current);
+                  sleepTimerRef.current = setTimeout(() => {
+                    sleepTimerRef.current = null;
                     if (modeRef.current === "resting") {
                       wakeUp();
                     }
@@ -1136,9 +1287,13 @@ export function useAutonomousCapy({
         }
       }
 
-      // Safety watchdog: If in wander or idle mode with no waypoints and no active timers, resume roaming
+      // Safety watchdog: If in any walking/idle mode with no waypoints and no active timers, resume roaming
       if (
-        (currentMode === "wander" || currentMode === "idle") &&
+        (currentMode === "wander" ||
+          currentMode === "idle" ||
+          currentMode === "walk_to_snack" ||
+          currentMode === "walk_to_focus" ||
+          currentMode === "walk_home") &&
         waypointsRef.current.length === 0 &&
         !transitionTimerRef.current &&
         !emoteTimerRef.current &&
@@ -1147,7 +1302,11 @@ export function useAutonomousCapy({
         transitionTimerRef.current = setTimeout(() => {
           transitionTimerRef.current = null;
           if (
-            (modeRef.current === "wander" || modeRef.current === "idle") &&
+            (modeRef.current === "wander" ||
+              modeRef.current === "idle" ||
+              modeRef.current === "walk_to_snack" ||
+              modeRef.current === "walk_to_focus" ||
+              modeRef.current === "walk_home") &&
             !isDraggingRef.current
           ) {
             setPose("walk");
