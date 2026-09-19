@@ -185,31 +185,37 @@ export default function CapySprite({
   }, [pose]);
 
   const isSoundPlayingRef = useRef(false);
+  const soundDurationRef = useRef(3000);
+  const soundStartTimeRef = useRef(0);
 
-  // When pose is "shout", track whether sound is playing to hold on frame 6 (index 5)
+  // When pose is "shout", track whether sound is playing and synchronize dynamic animation
   useEffect(() => {
     if (pose !== "shout") return;
 
     isSoundPlayingRef.current = true;
+    soundStartTimeRef.current = Date.now();
+    soundDurationRef.current = 3000;
 
-    // Safety fallback: if sound is muted or blocked, hold for 2.8s then release
     let fallbackTimer = setTimeout(() => {
       isSoundPlayingRef.current = false;
-    }, 2800);
+    }, 15000);
 
     const handleSoundStarted = (e: Event) => {
       isSoundPlayingRef.current = true;
+      soundStartTimeRef.current = Date.now();
       clearTimeout(fallbackTimer);
       const ce = e as CustomEvent<{ durationMs?: number }>;
       const dur = ce.detail?.durationMs;
       if (dur && dur > 0) {
+        soundDurationRef.current = dur;
         fallbackTimer = setTimeout(() => {
           isSoundPlayingRef.current = false;
-        }, dur + 250);
+        }, dur + 100);
       } else {
+        soundDurationRef.current = 3000;
         fallbackTimer = setTimeout(() => {
           isSoundPlayingRef.current = false;
-        }, 15000);
+        }, 3500);
       }
     };
 
@@ -247,14 +253,53 @@ export default function CapySprite({
       if (onFrameRef.current) onFrameRef.current(0);
     }, 0);
 
+    // Dynamic audio synchronization for long audio animations (e.g. shout)
+    if (pose === "shout") {
+      const startTime = Date.now();
+      const tickRate = 45; // Smooth ~22-30fps updates
+
+      const interval = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const totalDuration = soundDurationRef.current || 3000;
+        // Final portion: 5 frames (indices 3..7) taking approximately 1.2s - 1.8s
+        const finalDuration = Math.min(1800, Math.max(800, totalDuration * 0.4));
+        const loopUntil = Math.max(0, totalDuration - finalDuration);
+
+        if (elapsed < loopUntil && isSoundPlayingRef.current) {
+          // A. 3-frame subtle idle loop: Frame 1 -> 2 -> 3 -> 2 -> 1...
+          const idleFrames = [0, 1, 2, 1];
+          const idleStep = Math.floor(elapsed / 140) % idleFrames.length;
+          const frame = idleFrames[idleStep];
+          setFrameIdx(frame);
+          if (onFrameRef.current) onFrameRef.current(frame);
+        } else {
+          // B. Final audio-sync portion: play remaining frames sequentially to the climax
+          const finalFrames = [3, 4, 5, 6, 7];
+          const finalElapsed = elapsed - loopUntil;
+          const finalStep = Math.min(
+            finalFrames.length - 1,
+            Math.floor((finalElapsed / finalDuration) * finalFrames.length),
+          );
+          const frame = finalFrames[finalStep];
+          setFrameIdx(frame);
+          if (onFrameRef.current) onFrameRef.current(frame);
+
+          // Synchronize ending: finish exactly when audio ends or time expires
+          if (!isSoundPlayingRef.current || elapsed >= totalDuration) {
+            clearInterval(interval);
+            setFrameIdx(7);
+            if (onFrameRef.current) onFrameRef.current(7);
+            if (onAnimationCompleteRef.current) onAnimationCompleteRef.current();
+          }
+        }
+      }, tickRate);
+
+      return () => clearInterval(interval);
+    }
+
+    // Standard sequence loop for other animations
     const interval = setInterval(() => {
       setFrameIdx((current) => {
-        // If shouting, hold on frame 6 (index 5: shout-6.png) for however long the sound is!
-        if (pose === "shout" && current === 5 && isSoundPlayingRef.current) {
-          if (onFrameRef.current) onFrameRef.current(5);
-          return 5;
-        }
-
         const next = current + 1;
         if (next >= config.frames.length) {
           if (config.loop) {
