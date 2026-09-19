@@ -18,7 +18,8 @@
     "desktop": "electron desktop/main.cjs",
     "desktop:check": "node --test desktop/paths.test.cjs",
     "desktop:smoke": "electron desktop/main.cjs --smoke",
-    "desktop:package": "npm run build:vercel && node scripts/desktop-package.mjs"
+    "desktop:package": "npm run build:vercel && node scripts/desktop-package.mjs",
+    "desktop:installer": "npm run desktop:package && node scripts/build-installer.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -29,6 +30,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
     "drizzle-orm": "0.45.2",
+    "electron-squirrel-startup": "^1.0.1",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^1.31.0",
@@ -58,6 +60,7 @@
     "@vitejs/plugin-rsc": "0.5.26",
     "drizzle-kit": "0.31.10",
     "electron": "^44.3.0",
+    "electron-winstaller": "^5.4.4",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
     "fake-indexeddb": "^6.2.5",

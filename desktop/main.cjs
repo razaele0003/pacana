@@ -1,3 +1,6 @@
+try {
+  if (require("electron-squirrel-startup")) return;
+} catch {}
 const {
   app,
   BrowserWindow,

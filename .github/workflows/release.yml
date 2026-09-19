@@ -22,7 +22,7 @@ jobs:
         run: npm ci
 
       - name: Build and package desktop
-        run: npm run desktop:package
+        run: npm run desktop:installer
 
       - name: Compress package
         shell: pwsh
@@ -33,7 +33,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: desktop-output/Pacana-Windows-x64.zip
+          files: |
+            desktop-output/installer/Pacana-Setup.exe
+            desktop-output/Pacana-Windows-x64.zip
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
