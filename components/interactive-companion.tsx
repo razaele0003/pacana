@@ -65,25 +65,6 @@ export function CushionSeed({
   );
 }
 
-function getEmptyCushionText(stage: CushionSeedStage, treeStage: number = 1): string {
-  switch (stage) {
-    case "falling":
-      return "A seed drifted onto the cushion...";
-    case "planted":
-      return "A seed is planted on the cushion.";
-    case "sprouting":
-      if (treeStage <= 3) return "A tiny sprout is peeking out...";
-      if (treeStage <= 6) return "The sapling is growing taller...";
-      return "Blossoms are opening for Cappy!";
-    case "ready":
-      return "Calling Capy home with a fresh blossoming snack!";
-    case "being_eaten":
-      return "Nom nom nom... Welcome back!";
-    default:
-      return "Capy is exploring your screen.";
-  }
-}
-
 // Shared cushion seed stage & tree stage persisted across unmounts/tab navigation
 let sharedCushionSeedStage: CushionSeedStage = "none";
 let sharedCushionTreeStage: number = 1;
@@ -606,9 +587,6 @@ export default function InteractiveCompanion({
               treeStage={cushionSeedState.treeStage}
             />
           </div>
-          <p className="empty-text">
-            {getEmptyCushionText(cushionSeedState.stage, cushionSeedState.treeStage)}
-          </p>
         </div>
         <div className="docked-actions">
           <button
@@ -642,7 +620,6 @@ export default function InteractiveCompanion({
               <div className="empty-cushion" aria-hidden="true">
                 <CushionSeed stage="none" treeStage={1} />
               </div>
-              <p className="empty-text">Drop anywhere on screen...</p>
             </div>
             <div className="docked-actions" style={{ visibility: "hidden" }}>
               <button type="button" className="companion-wander-btn" disabled>
