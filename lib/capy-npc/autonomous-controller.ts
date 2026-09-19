@@ -109,9 +109,24 @@ export function useAutonomousCapy({
   const stalledFramesCountRef = useRef<number>(0);
   const resumeGoalRef = useRef<() => void>(() => {});
 
+  const currentGoalRef = useRef<CapyGoalType>("wander");
+  const interruptedGoalRef = useRef<CapyGoalType | null>(null);
+  const temporaryActionRef = useRef<"happy" | "curious" | "reading" | "resting" | "planting" | "microphone" | null>(null);
+  const isEmoteActiveRef = useRef<boolean>(false);
+  const pausedWaypointsRef = useRef<Point[]>([]);
+  const treeGrowthTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const changeMode = useCallback((newMode: CompanionMode) => {
     modeRef.current = newMode;
     setMode(newMode);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("pacana:cappy-status", {
+          detail: { mode: newMode, goal: currentGoalRef.current },
+        })
+      );
+    }
 
     if (actionTimeoutRef.current) {
       clearTimeout(actionTimeoutRef.current);
@@ -145,6 +160,8 @@ export function useAutonomousCapy({
       actionTimeoutRef.current = setTimeout(() => {
         actionTimeoutRef.current = null;
         if (modeRef.current === newMode) {
+          isEmoteActiveRef.current = false;
+          temporaryActionRef.current = null;
           resumeGoalRef.current();
         }
       }, 3500);
@@ -152,14 +169,13 @@ export function useAutonomousCapy({
       actionTimeoutRef.current = setTimeout(() => {
         actionTimeoutRef.current = null;
         if (modeRef.current === "waking") {
+          isEmoteActiveRef.current = false;
+          temporaryActionRef.current = null;
           resumeGoalRef.current();
         }
       }, 2500);
     }
   }, []);
-
-  const currentGoalRef = useRef<CapyGoalType>("wander");
-  const interruptedGoalRef = useRef<CapyGoalType | null>(null);
 
   const activeLeafRef = useRef<SpawnedLeaf | null>(activeLeaf);
   activeLeafRef.current = activeLeaf;
@@ -192,9 +208,38 @@ export function useAutonomousCapy({
   }, []);
 
   // Temporary Emote Trigger (~0.8 - 2.4s) - stationary world position, preserves persistent goal!
+  // Ignores duplicate clicks while an emote is playing.
   const triggerEmote = useCallback(
     (type: EmoteType, duration = 1100) => {
-      if (isDraggingRef.current) return;
+      if (
+        isDraggingRef.current ||
+        (isEmoteActiveRef.current && modeRef.current !== "resting") ||
+        modeRef.current === "planting" ||
+        modeRef.current === "eating"
+      ) {
+        return;
+      }
+
+      // If Cappy is resting, clicking an action emoji disturbs/wakes him up to perform the action!
+      if (modeRef.current === "resting" || currentGoalRef.current === "rest") {
+        if (sleepTimerRef.current) {
+          clearTimeout(sleepTimerRef.current);
+          sleepTimerRef.current = null;
+        }
+        if (!activeLeafRef.current || activeLeafRef.current.isBeingEaten) {
+          currentGoalRef.current = "wander";
+        }
+      }
+
+      isEmoteActiveRef.current = true;
+      temporaryActionRef.current =
+        type === "curious"
+          ? "curious"
+          : type === "happy"
+          ? "happy"
+          : type === "reading" || type === "read"
+          ? "reading"
+          : "happy";
 
       if (emoteTimerRef.current) {
         clearTimeout(emoteTimerRef.current);
@@ -205,25 +250,24 @@ export function useAutonomousCapy({
         transitionTimerRef.current = null;
       }
 
-      if (emoteTimerRef.current) {
-        clearTimeout(emoteTimerRef.current);
-        emoteTimerRef.current = null;
+      // Temporarily pause waypoints without destroying persistent goal
+      if (waypointsRef.current.length > 0 && pausedWaypointsRef.current.length === 0) {
+        pausedWaypointsRef.current = [...waypointsRef.current];
+        waypointsRef.current = [];
       }
 
-      // Clear waypoints so Capy is completely stationary in world space
-      waypointsRef.current = [];
+      const emoteDuration =
+        type === "curious"
+          ? 1000 // ~0.8-1.2s per user specs
+          : type === "happy"
+          ? 1100 // ~1.0-1.5s
+          : type === "reading" || type === "read"
+          ? 1800
+          : duration;
 
       if (type === "curious") {
-        if (pose === "curious") {
-          setPose("idle");
-          setTimeout(() => {
-            setPose("curious");
-            changeMode("curious");
-          }, 16);
-        } else {
-          setPose("curious");
-          changeMode("curious");
-        }
+        setPose("curious");
+        changeMode("curious");
         setActiveEmote(null);
       } else if (type === "reading" || type === "read") {
         setPose("read");
@@ -231,7 +275,7 @@ export function useAutonomousCapy({
         setActiveEmote({
           type: "reading",
           id: `emote-${Date.now()}-${Math.random()}`,
-          duration,
+          duration: emoteDuration,
         });
       } else if (type === "happy") {
         setPose("happy");
@@ -239,16 +283,13 @@ export function useAutonomousCapy({
         setShowHearts(true);
         setActiveEmote(null);
         playCompanionSound("pet");
-        if (duration > 0) {
-          setTimeout(() => setShowHearts(false), duration);
-        }
       } else if (type === "thinking") {
         setPose("thinking");
         changeMode("thinking");
         setActiveEmote({
           type: "thinking",
           id: `emote-${Date.now()}-${Math.random()}`,
-          duration,
+          duration: emoteDuration,
         });
       } else if (type === "excited" || type === "snack") {
         setPose("happy");
@@ -257,13 +298,16 @@ export function useAutonomousCapy({
         playCompanionSound("pet");
       }
 
-      if (duration > 0) {
-        emoteTimerRef.current = setTimeout(() => {
-          emoteTimerRef.current = null;
-          setActiveEmote(null);
-          resumeGoalRef.current();
-        }, duration);
-      }
+      emoteTimerRef.current = setTimeout(() => {
+        emoteTimerRef.current = null;
+        isEmoteActiveRef.current = false;
+        temporaryActionRef.current = null;
+        setActiveEmote(null);
+        setShowHearts(false);
+
+        // Resume persistent goal (e.g. eating tree snack) or return to wander
+        resumeGoalRef.current();
+      }, emoteDuration);
     },
     [changeMode]
   );
@@ -356,8 +400,14 @@ export function useAutonomousCapy({
         return;
       }
 
-      if (modeRef.current === "reading" || modeRef.current === "thinking") {
+      if (
+        modeRef.current === "reading" ||
+        modeRef.current === "thinking" ||
+        modeRef.current === "curious" ||
+        modeRef.current === "happy"
+      ) {
         setActiveEmote(null);
+        setShowHearts(false);
         if (emoteTimerRef.current) {
           clearTimeout(emoteTimerRef.current);
           emoteTimerRef.current = null;
@@ -368,30 +418,28 @@ export function useAutonomousCapy({
         }
       }
 
-      const readyLeaf: SpawnedLeaf = {
-        ...leaf,
-        stage: "ready",
-        treeStage: 10,
-      };
-      setActiveLeaf(readyLeaf);
-
       refreshObstacles();
       const currentPos = posRef.current;
 
       // If Capy is already within eating distance (36px) of the tree, start eating immediately!
-      const distToTree = Math.hypot(readyLeaf.x - currentPos.x, readyLeaf.y - currentPos.y);
+      const distToTree = Math.hypot(leaf.x - currentPos.x, leaf.y - currentPos.y);
       if (distToTree <= 36) {
-        if (readyLeaf.x !== currentPos.x) {
-          setFacing(readyLeaf.x > currentPos.x ? "right" : "left");
+        if (leaf.x !== currentPos.x) {
+          setFacing(leaf.x > currentPos.x ? "right" : "left");
         }
         waypointsRef.current = [];
         currentGoalRef.current = "eat_snack";
+        setActiveLeaf((curr) => {
+          const ready = curr ? { ...curr, stage: "ready" as const, treeStage: 10 } : null;
+          activeLeafRef.current = ready;
+          return ready;
+        });
         changeMode("eating");
         setPose("eating");
         return;
       }
 
-      const path: Point[] = [{ x: readyLeaf.x, y: readyLeaf.y }];
+      const path: Point[] = [{ x: leaf.x, y: leaf.y }];
 
       if (path.length > 0) {
         const first = path[0];
@@ -515,7 +563,6 @@ export function useAutonomousCapy({
       changeMode("walk_to_focus");
       setPose("walk");
 
-      triggerEmote("excited", 800);
       playCompanionSound("pop");
 
       if (path.length > 0) {
@@ -525,7 +572,7 @@ export function useAutonomousCapy({
         }
       }
     },
-    [refreshObstacles, triggerEmote, planNextWander, changeMode]
+    [refreshObstacles, planNextWander, changeMode]
   );
 
   // Resume persistent goal: calculates path to current persistent goal target
@@ -533,13 +580,13 @@ export function useAutonomousCapy({
     if (isDraggingRef.current) return;
     const goal = currentGoalRef.current;
 
-    // 1. Persistent Goal: Eat snack tree
+    // 1. Persistent Goal: Eat snack tree (must persist through disturbances until eaten!)
     if (
-      goal === "eat_snack" &&
+      (goal === "eat_snack" || activeLeafRef.current) &&
       activeLeafRef.current &&
-      activeLeafRef.current.stage === "ready" &&
       !activeLeafRef.current.isBeingEaten
     ) {
+      currentGoalRef.current = "eat_snack";
       startApproachingReadyLeaf(activeLeafRef.current);
       return;
     }
@@ -566,18 +613,7 @@ export function useAutonomousCapy({
       return;
     }
 
-    // 5. If a ready tree exists anywhere on screen, eating it takes priority over random wander!
-    if (
-      activeLeafRef.current &&
-      activeLeafRef.current.stage === "ready" &&
-      !activeLeafRef.current.isBeingEaten
-    ) {
-      currentGoalRef.current = "eat_snack";
-      startApproachingReadyLeaf(activeLeafRef.current);
-      return;
-    }
-
-    // 6. Normal continuous wander
+    // 5. Normal continuous wander
     currentGoalRef.current = "wander";
     changeMode("wander");
     setPose("walk");
@@ -586,78 +622,151 @@ export function useAutonomousCapy({
 
   resumeGoalRef.current = resumeGoal;
 
-  // Autonomous wild tree growth: a seed spontaneously sprouts on screen for Cappy to find and eat
-  const spawnWildTree = useCallback(() => {
-    if (activeLeafRef.current || isDraggingRef.current) return;
-
-    refreshObstacles();
-    const vp = viewportRef.current;
-
-    const minX = 48;
-    const maxX = Math.max(minX + 50, vp.width - 120);
-    const minY = 72;
-    const maxY = Math.max(minY + 50, vp.height - 130);
-
-    const target: Point = {
-      x: Math.round(minX + Math.random() * (maxX - minX)),
-      y: Math.round(minY + Math.random() * (maxY - minY)),
-    };
-
-    const leaf: SpawnedLeaf = {
-      id: `wild-leaf-${Date.now()}`,
-      x: target.x,
-      y: target.y,
-      createdAt: Date.now(),
-      stage: "sprouting",
-      treeStage: 1,
-      isBeingEaten: false,
-    };
-
-    setActiveLeaf(leaf);
-
-    let step = 1;
-    const growthInterval = setInterval(() => {
-      step += 1;
-      if (step >= 10) {
-        clearInterval(growthInterval);
-        setActiveLeaf((curr) => {
-          if (curr && curr.id === leaf.id) {
-            const readyLeaf: SpawnedLeaf = {
-              ...curr,
-              stage: "ready",
-              treeStage: 10,
-            };
-            currentGoalRef.current = "eat_snack";
-            startApproachingReadyLeaf(readyLeaf);
-            return readyLeaf;
-          }
-          return curr;
-        });
-      } else {
-        setActiveLeaf((curr) =>
-          curr && curr.id === leaf.id
-            ? {
-                ...curr,
-                stage: step >= 6 ? "growing" : "sprouting",
-                treeStage: step,
-              }
-            : curr
-        );
-      }
-    }, 140);
-  }, [refreshObstacles, startApproachingReadyLeaf]);
-
-  // Spawns a tree snack by spontaneously sprouting a wild tree (no planting animation on screen)
+  // Spawns a tree snack randomly on the page (Cappy does NOT plant it)
+  // Cappy is shocked/surprised, then walks to the tree and eats it
   const spawnLeaf = useCallback(
-    (_customPoint?: Point) => {
-      spawnWildTree();
+    (customPoint?: Point) => {
+      if (isDraggingRef.current) {
+        return;
+      }
+
+      // If Cappy is resting, clicking leaves emoji disturbs/wakes him up!
+      if (modeRef.current === "resting" || currentGoalRef.current === "rest") {
+        if (sleepTimerRef.current) {
+          clearTimeout(sleepTimerRef.current);
+          sleepTimerRef.current = null;
+        }
+      }
+
+      if (emoteTimerRef.current) {
+        clearTimeout(emoteTimerRef.current);
+        emoteTimerRef.current = null;
+      }
+      if (transitionTimerRef.current) {
+        clearTimeout(transitionTimerRef.current);
+        transitionTimerRef.current = null;
+      }
+      if (treeGrowthTimerRef.current) {
+        clearInterval(treeGrowthTimerRef.current);
+        treeGrowthTimerRef.current = null;
+      }
+
+      // Stop current wandering movement
+      waypointsRef.current = [];
+      pausedWaypointsRef.current = [];
+
+      refreshObstacles();
+      const vp = viewportRef.current;
+      const cur = posRef.current;
+
+      // Choose a random safe position across the page away from Cappy
+      let treeX: number;
+      let treeY: number;
+
+      if (customPoint) {
+        treeX = customPoint.x;
+        treeY = customPoint.y;
+      } else {
+        const minX = 60;
+        const maxX = Math.max(minX + 80, vp.width - 120);
+        const minY = 80;
+        const maxY = Math.max(minY + 80, vp.height - 140);
+
+        treeX = minX + Math.random() * (maxX - minX);
+        treeY = minY + Math.random() * (maxY - minY);
+
+        // Try to pick a location at least 120px away from Cappy so he has space to react and walk
+        for (let i = 0; i < 15; i++) {
+          const candX = minX + Math.random() * (maxX - minX);
+          const candY = minY + Math.random() * (maxY - minY);
+          if (Math.hypot(candX - cur.x, candY - cur.y) >= 120) {
+            treeX = candX;
+            treeY = candY;
+            break;
+          }
+        }
+      }
+
+      const leaf: SpawnedLeaf = {
+        id: `leaf-${Date.now()}`,
+        x: Math.round(treeX),
+        y: Math.round(treeY),
+        createdAt: Date.now(),
+        stage: "sprouting",
+        treeStage: 1,
+        isBeingEaten: false,
+      };
+
+      setActiveLeaf(leaf);
+      activeLeafRef.current = leaf;
+      currentGoalRef.current = "eat_snack";
+
+      // Rapid tree growth (10 stages, 150ms per stage)
+      let stage = 1;
+      treeGrowthTimerRef.current = setInterval(() => {
+        stage += 1;
+        if (stage >= 10) {
+          if (treeGrowthTimerRef.current) {
+            clearInterval(treeGrowthTimerRef.current);
+            treeGrowthTimerRef.current = null;
+          }
+          setActiveLeaf((curr) => {
+            if (curr && curr.id === leaf.id) {
+              const updated: SpawnedLeaf = {
+                ...curr,
+                stage: "ready",
+                treeStage: 10,
+              };
+              activeLeafRef.current = updated;
+              return updated;
+            }
+            return curr;
+          });
+        } else {
+          setActiveLeaf((curr) => {
+            if (curr && curr.id === leaf.id) {
+              const updated: SpawnedLeaf = {
+                ...curr,
+                stage: stage >= 6 ? "growing" : "sprouting",
+                treeStage: stage,
+              };
+              activeLeafRef.current = updated;
+              return updated;
+            }
+            return curr;
+          });
+        }
+      }, 150);
+
+      // Cappy reacts with shock / surprise!
+      // Turn to face the newly appeared tree
+      if (Math.abs(leaf.x - cur.x) > 4) {
+        setFacing(leaf.x > cur.x ? "right" : "left");
+      }
+      isEmoteActiveRef.current = true;
+      temporaryActionRef.current = "curious";
+      changeMode("curious");
+      setPose("curious");
+      playCompanionSound("pop");
+
+      // After shock reaction (~900ms), start walking to the tree to eat it!
+      transitionTimerRef.current = setTimeout(() => {
+        transitionTimerRef.current = null;
+        isEmoteActiveRef.current = false;
+        temporaryActionRef.current = null;
+        if (activeLeafRef.current && !activeLeafRef.current.isBeingEaten) {
+          startApproachingReadyLeaf(activeLeafRef.current);
+        }
+      }, 900);
     },
-    [spawnWildTree]
+    [refreshObstacles, changeMode, startApproachingReadyLeaf]
   );
 
-  // Start shouting animation when timer completes (focus, short break, long break)
+  const lastAlarmIdRef = useRef<string | null>(null);
+
+  // Start shouting/microphone animation when timer completes (focus, short break, long break)
   const startShouting = useCallback(() => {
-    if (isDraggingRef.current) return;
+    if (isDraggingRef.current || modeRef.current === "shouting") return;
 
     if (transitionTimerRef.current) {
       clearTimeout(transitionTimerRef.current);
@@ -670,20 +779,34 @@ export function useAutonomousCapy({
 
     waypointsRef.current = [];
     currentGoalRef.current = "alarm";
+    temporaryActionRef.current = "microphone";
     changeMode("shouting");
     setPose("shout");
   }, [changeMode]);
 
-  // Rest & Waking System
+  // Rest & Waking System: stays sleeping until disturbed, then wakes and resumes goal or wanders
   const wakeUp = useCallback(() => {
     if (sleepTimerRef.current) {
       clearTimeout(sleepTimerRef.current);
       sleepTimerRef.current = null;
     }
-    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+    if (transitionTimerRef.current) {
+      clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
+
     changeMode("waking");
     setPose("stretch"); // 10-frame stretch wakeup from Stretch wakeup.png
     playCompanionSound("pet");
+
+    // Stretch wakeup duration (~1.0s) then resume goal (e.g. tree snack) or wander!
+    setTimeout(() => {
+      if (modeRef.current === "waking") {
+        isEmoteActiveRef.current = false;
+        temporaryActionRef.current = null;
+        resumeGoalRef.current();
+      }
+    }, 1000);
   }, [changeMode]);
 
   // Petting interaction (temporary reaction that DOES NOT cancel current goal!)
@@ -700,20 +823,47 @@ export function useAutonomousCapy({
 
   const toggleSleep = useCallback(() => {
     if (modeRef.current === "resting") {
+      // Clicking sleep/wake button while already resting wakes Cappy!
       wakeUp();
-    } else {
-      // Enter resting state indefinitely
-      if (sleepTimerRef.current) {
-        clearTimeout(sleepTimerRef.current);
-        sleepTimerRef.current = null;
-      }
-      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-      waypointsRef.current = [];
-      currentGoalRef.current = "rest";
-      changeMode("resting");
-      setPose("sleep"); // peaceful sleeping artwork from Sleeping.png (no Zzz)
-      playCompanionSound("drop");
+      return;
     }
+    if (
+      modeRef.current === "waking" ||
+      isDraggingRef.current ||
+      isEmoteActiveRef.current
+    ) {
+      // Ignore duplicate clicks while waking or during other emotes
+      return;
+    }
+
+    if (sleepTimerRef.current) {
+      clearTimeout(sleepTimerRef.current);
+      sleepTimerRef.current = null;
+    }
+    if (transitionTimerRef.current) {
+      clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
+    if (emoteTimerRef.current) {
+      clearTimeout(emoteTimerRef.current);
+      emoteTimerRef.current = null;
+    }
+
+    isEmoteActiveRef.current = true;
+    temporaryActionRef.current = "resting";
+    currentGoalRef.current = "rest";
+
+    // Pause current waypoints
+    if (waypointsRef.current.length > 0 && pausedWaypointsRef.current.length === 0) {
+      pausedWaypointsRef.current = [...waypointsRef.current];
+      waypointsRef.current = [];
+    }
+
+    changeMode("resting");
+    setPose("sleep"); // peaceful sleeping artwork from Sleeping.png (no Zzz)
+    playCompanionSound("drop");
+
+    // NO AUTO-WAKE TIMER: Cappy remains sleeping indefinitely until disturbed by drag, click, or other action emoji!
   }, [wakeUp, changeMode]);
 
   // Frame callback from CapySprite (for precise button press timing)
@@ -736,6 +886,11 @@ export function useAutonomousCapy({
         playCompanionSound("snack");
         setTimeout(() => {
           setActiveLeaf(null);
+          activeLeafRef.current = null;
+          if (treeGrowthTimerRef.current) {
+            clearInterval(treeGrowthTimerRef.current);
+            treeGrowthTimerRef.current = null;
+          }
         }, 350);
       }
     }
@@ -753,7 +908,6 @@ export function useAutonomousCapy({
       }
 
       // Focus sequence completed (10 frames finished)
-      // If a completion callback was provided (e.g. from Call Home sequence), run it!
       if (onFocusCompleteRef.current) {
         const cb = onFocusCompleteRef.current;
         onFocusCompleteRef.current = null;
@@ -770,6 +924,11 @@ export function useAutonomousCapy({
     } else if (modeRef.current === "eating") {
       // Eating sequence completed (10 frames finished)
       setActiveLeaf(null);
+      activeLeafRef.current = null;
+      if (treeGrowthTimerRef.current) {
+        clearInterval(treeGrowthTimerRef.current);
+        treeGrowthTimerRef.current = null;
+      }
       currentGoalRef.current = "wander";
       setPose("happy");
       changeMode("happy");
@@ -777,10 +936,9 @@ export function useAutonomousCapy({
       playCompanionSound("pet");
     } else if (modeRef.current === "planting") {
       // 8-frame planting animation completed
-      // The sprout has appeared! Now spawn the tree snack and start its growth
+      // Spawn the tree snack and start its independent background growth
       const vp = viewportRef.current;
       const cur = posRef.current;
-      // In the sprite, dirt mound and sprout are on the right side of Cappy
       const offsetX = facing === "right" ? 54 : -54;
       const plantX = Math.max(40, Math.min(vp.width - 40, cur.x + offsetX));
       const plantY = Math.max(48, Math.min(vp.height - 48, cur.y + 12));
@@ -796,12 +954,9 @@ export function useAutonomousCapy({
       };
 
       setActiveLeaf(leaf);
-      setPose("happy");
-      changeMode("happy");
-      triggerEmote("happy", 800);
-      playCompanionSound("pet");
 
-      // Smoothly advance through tree growth stages 1..10
+      // Independent background tree growth (10 stages: 400ms per stage)
+      // Cappy does NOT interact with it during growth or when ready!
       let step = 1;
       const growthInterval = setInterval(() => {
         step += 1;
@@ -809,14 +964,11 @@ export function useAutonomousCapy({
           clearInterval(growthInterval);
           setActiveLeaf((curr) => {
             if (curr && curr.id === leaf.id) {
-              const readyLeaf: SpawnedLeaf = {
+              return {
                 ...curr,
                 stage: "ready",
                 treeStage: 10,
               };
-              currentGoalRef.current = "eat_snack";
-              startApproachingReadyLeaf(readyLeaf);
-              return readyLeaf;
             }
             return curr;
           });
@@ -831,12 +983,23 @@ export function useAutonomousCapy({
               : curr
           );
         }
-      }, 140);
+      }, 400);
 
-      transitionTimerRef.current = setTimeout(() => {
-        transitionTimerRef.current = null;
-        resumeGoalRef.current();
-      }, 700);
+      // Cappy celebrates planting briefly (~0.8s), then returns to normal wandering
+      setPose("happy");
+      changeMode("happy");
+      setShowHearts(true);
+      playCompanionSound("pet");
+
+      setTimeout(() => {
+        setShowHearts(false);
+        isEmoteActiveRef.current = false;
+        temporaryActionRef.current = null;
+        currentGoalRef.current = "wander";
+        changeMode("wander");
+        setPose("walk");
+        planNextWander();
+      }, 800);
     } else if (
       modeRef.current === "waking" ||
       modeRef.current === "thinking" ||
@@ -849,35 +1012,33 @@ export function useAutonomousCapy({
         clearTimeout(emoteTimerRef.current);
         emoteTimerRef.current = null;
       }
+      isEmoteActiveRef.current = false;
+      temporaryActionRef.current = null;
       setActiveEmote(null);
+      setShowHearts(false);
+      if (pausedWaypointsRef.current.length > 0) {
+        waypointsRef.current = pausedWaypointsRef.current;
+        pausedWaypointsRef.current = [];
+      }
       resumeGoalRef.current();
     } else if (modeRef.current === "shouting") {
-      // Shouting sequence finished (sound ended and frames 7-8 played)
-      setPose("happy");
-      changeMode("happy");
-      triggerEmote("happy", 900);
-      playCompanionSound("pet");
+      // Microphone sequence finished (audio ended and Frame 7 played)
+      temporaryActionRef.current = null;
+      isEmoteActiveRef.current = false;
+      currentGoalRef.current = "wander";
+      changeMode("wander");
+      setPose("walk");
+      planNextWander();
     }
-  }, [triggerEmote, startApproachingReadyLeaf, changeMode, facing, pose]);
-
-  // Goal: When a tree suddenly pops up on screen and is ready, Capy will ALWAYS go and eat it!
-  useEffect(() => {
-    if (activeLeaf && activeLeaf.stage === "ready" && !activeLeaf.isBeingEaten) {
-      if (
-        modeRef.current !== "walk_to_snack" &&
-        modeRef.current !== "eating" &&
-        modeRef.current !== "waking" &&
-        modeRef.current !== "shouting" &&
-        !isDraggingRef.current
-      ) {
-        startApproachingReadyLeaf(activeLeaf);
-      }
-    }
-  }, [activeLeaf, startApproachingReadyLeaf]);
+  }, [triggerEmote, changeMode, facing, pose, planNextWander]);
 
   // Trigger shouting animation when timer completes (focus, short break, long break)
   useEffect(() => {
-    const handleTimerComplete = () => {
+    const handleTimerComplete = (e: Event) => {
+      const ce = e as CustomEvent<{ timerId?: string }>;
+      const timerId = ce.detail?.timerId || `alarm-${Date.now()}`;
+      if (lastAlarmIdRef.current === timerId) return;
+      lastAlarmIdRef.current = timerId;
       startShouting();
     };
     window.addEventListener("pacana:timer-complete", handleTimerComplete);
@@ -980,7 +1141,7 @@ export function useAutonomousCapy({
         animFrameId = requestAnimationFrame(tick);
         return;
       }
-      const dt = Math.min((time - lastFrameTimeRef.current) / 1000, 0.1);
+      const dt = Math.min((time - lastFrameTimeRef.current) / 1000, 0.35);
       lastFrameTimeRef.current = time;
 
       const currentMode = modeRef.current;
@@ -1063,21 +1224,21 @@ export function useAutonomousCapy({
           if (stalledFramesCountRef.current >= 75) {
             stalledFramesCountRef.current = 0;
             if (currentMode === "walk_to_snack") {
-              if (activeLeafRef.current) {
+              if (activeLeafRef.current && !activeLeafRef.current.isBeingEaten) {
                 const distToLeaf = Math.hypot(
                   activeLeafRef.current.x - cur.x,
                   activeLeafRef.current.y - cur.y
                 );
                 if (distToLeaf <= 65) {
+                  setActiveLeaf((curr) => {
+                    const ready = curr ? { ...curr, stage: "ready" as const, treeStage: 10 } : null;
+                    activeLeafRef.current = ready;
+                    return ready;
+                  });
                   changeMode("eating");
                   setPose("eating");
                 } else {
-                  setActiveLeaf(null);
-                  waypointsRef.current = [];
-                  currentGoalRef.current = "wander";
-                  changeMode("wander");
-                  setPose("walk");
-                  planNextWander();
+                  startApproachingReadyLeaf(activeLeafRef.current);
                 }
               } else {
                 waypointsRef.current = [];
@@ -1186,6 +1347,11 @@ export function useAutonomousCapy({
               setPose("focus");
             } else if (currentMode === "walk_to_snack") {
               // Arrived at plant! Start 10-frame eating sequence from Eating.png
+              setActiveLeaf((curr) => {
+                const ready = curr ? { ...curr, stage: "ready" as const, treeStage: 10 } : null;
+                activeLeafRef.current = ready;
+                return ready;
+              });
               changeMode("eating");
               setPose("eating");
             } else {
@@ -1213,16 +1379,11 @@ export function useAutonomousCapy({
                       wakeUp();
                     }
                   }, 3200);
-                } else if (roll < 0.85 && !activeLeafRef.current) {
-                  // 3. Spontaneous wild tree sprouts for Capy to eat!
-                  spawnWildTree();
-                  setPose("idle");
-                  transitionTimerRef.current = setTimeout(() => {
-                    transitionTimerRef.current = null;
-                    if (modeRef.current === "wander" || modeRef.current === "idle") {
-                      planNextWander();
-                    }
-                  }, 500);
+                } else if (roll < 0.85) {
+                  // 3. Curious pause with ✨ curious emote!
+                  setPose("curious");
+                  changeMode("curious");
+                  triggerEmote("curious", 1200);
                 } else {
                   // 4. Thinking pause with 💭 emoji!
                   setPose("thinking");
@@ -1287,7 +1448,7 @@ export function useAutonomousCapy({
       cancelAnimationFrame(animFrameId);
       lastFrameTimeRef.current = 0;
     };
-  }, [enabled, walkSpeed, onPosChange, planNextWander, changeMode]);
+  }, [enabled, walkSpeed, onPosChange, planNextWander, changeMode, triggerEmote, wakeUp]);
 
   // Initial wander kick-off
   useEffect(() => {
@@ -1303,6 +1464,7 @@ export function useAutonomousCapy({
       clearTimeout(startTimeout);
       if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
       if (emoteTimerRef.current) clearTimeout(emoteTimerRef.current);
+      if (treeGrowthTimerRef.current) clearInterval(treeGrowthTimerRef.current);
     };
   }, [enabled, planNextWander]);
 
@@ -1313,7 +1475,17 @@ export function useAutonomousCapy({
       clearTimeout(transitionTimerRef.current);
       transitionTimerRef.current = null;
     }
+    if (sleepTimerRef.current) {
+      clearTimeout(sleepTimerRef.current);
+      sleepTimerRef.current = null;
+    }
     waypointsRef.current = [];
+    pausedWaypointsRef.current = [];
+    isEmoteActiveRef.current = false;
+    temporaryActionRef.current = null;
+    if (!activeLeafRef.current || activeLeafRef.current.isBeingEaten) {
+      currentGoalRef.current = "wander";
+    }
     changeMode("dragged");
     setPose("drag");
     setShowHearts(false);
@@ -1373,7 +1545,7 @@ export function useAutonomousCapy({
         }
       }
     },
-    [triggerPet, wakeUp]
+    [triggerPet, wakeUp, changeMode]
   );
 
   return {
@@ -1385,6 +1557,7 @@ export function useAutonomousCapy({
     setPose,
     mode,
     setMode: changeMode,
+    currentGoal: currentGoalRef.current,
     activeLeaf,
     activeEmote,
     triggerEmote,

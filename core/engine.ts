@@ -36,11 +36,15 @@ export function startPhase(
   };
 }
 export function nextPhase(s: State): Phase {
-  return s.timer?.phase === "focus"
-    ? s.completedCycle % s.settings.cycles === 0
-      ? "long"
-      : "short"
-    : "focus";
+  if (s.timer?.phase === "focus") return "short";
+  if (s.timer?.phase === "short") {
+    const cycleCount =
+      s.timer.status === "complete"
+        ? s.completedCycle
+        : s.completedCycle + 1;
+    return cycleCount % s.settings.cycles === 0 ? "long" : "focus";
+  }
+  return "focus";
 }
 export function pause(s: State, now: number) {
   if (s.timer?.status === "running") {
@@ -68,6 +72,9 @@ export function end(s: State, now: number) {
       category: t.category,
       note: "",
     });
+  if (t.phase === "short" && t.status !== "complete") {
+    s.completedCycle++;
+  }
   s.timer = null;
 }
 export function activate(s: State, now: number, mode: "clock" | "elapsed") {
@@ -117,6 +124,8 @@ export function reconcile(
         note: "",
       });
       s.rewards[`focus:${t.id}`] = Math.floor(t.duration / 60000);
+    }
+    if (t.phase === "short") {
       s.completedCycle++;
     }
     const auto =

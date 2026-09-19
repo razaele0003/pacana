@@ -901,11 +901,20 @@ export default function Pacana() {
                         )}
                       </div>
                       <span className="cycle-label">
-                        SESSION{" "}
-                        {(state.completedCycle % state.settings.cycles) + 1} OF{" "}
-                        {state.settings.cycles} <span>•</span>{" "}
-                        {state.settings.focus} / {state.settings.short} MIN
-                        RHYTHM
+                        {state.timer?.phase === "long" ? (
+                          <>
+                            CYCLE COMPLETE <span>•</span> LONG BREAK
+                          </>
+                        ) : (
+                          <>
+                            SESSION{" "}
+                            {(state.completedCycle % state.settings.cycles) + 1} OF{" "}
+                            {state.settings.cycles} <span>•</span>{" "}
+                            {state.timer?.phase === "short"
+                              ? "SHORT BREAK"
+                              : `${state.settings.focus} / ${state.settings.short} MIN RHYTHM`}
+                          </>
+                        )}
                       </span>
                     </div>
                   </div>
@@ -1097,13 +1106,11 @@ export default function Pacana() {
                 <div className="kind-note">
                   <SidebarCompanion
                     pose={
-                      timer?.status === "complete"
-                        ? "shout"
-                        : phase !== "focus"
-                          ? "rest"
-                          : timer?.status === "running"
-                            ? "study"
-                            : "idle"
+                      phase !== "focus"
+                        ? "rest"
+                        : timer?.status === "running"
+                          ? "study"
+                          : "idle"
                     }
                     isFloating={isCompanionFloating}
                     onToggleFloating={handleToggleCompanion}
@@ -1338,13 +1345,11 @@ export default function Pacana() {
           onToggleFloating={handleToggleCompanion}
           initialPos={companionDropPos || undefined}
           externalPose={
-            timer?.status === "complete"
-              ? "shout"
-              : phase !== "focus"
-                ? "rest"
-                : timer?.status === "running"
-                  ? "study"
-                  : "idle"
+            phase !== "focus"
+              ? "rest"
+              : timer?.status === "running"
+                ? "study"
+                : "idle"
           }
         />
       )}

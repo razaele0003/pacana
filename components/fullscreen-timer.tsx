@@ -159,7 +159,11 @@ export default function FullscreenTimer({
           <p className="eyebrow">
             <span className="status-dot" />
             {timer?.status === "complete"
-              ? "SESSION COMPLETE"
+              ? timer.phase === "focus"
+                ? "FOCUS COMPLETE"
+                : timer.phase === "short"
+                  ? "SESSION COMPLETE"
+                  : "CYCLE COMPLETE"
               : timer?.status === "paused"
                 ? "TAKE YOUR TIME"
                 : "ONE LITTLE MOMENT AT A TIME"}

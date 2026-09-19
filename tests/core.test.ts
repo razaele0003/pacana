@@ -269,13 +269,62 @@ test("suspension completes one phase, never creates phantom sessions", () => {
 test("continuous auto-start transitions and long break cycle", () => {
   const s = defaults();
   s.settings.focus = 1;
+  s.settings.short = 1;
+  s.settings.long = 1;
   s.settings.cycles = 1;
   s.settings.autoBreak = true;
+  s.settings.autoFocus = true;
   startPhase(s, 100000, "focus");
   reconcile(s, 160000, true);
+  assert.equal(s.timer!.phase, "short");
+  assert.equal(s.timer!.status, "running");
+  assert.equal(s.completedCycle, 0);
+  reconcile(s, 220000, true);
   assert.equal(s.timer!.phase, "long");
   assert.equal(s.timer!.status, "running");
+  assert.equal(s.completedCycle, 1);
   assert.equal(nextPhase(s), "focus");
+});
+test("1 session is 1 focus + 1 short break across a 4-session cycle", () => {
+  const s = defaults();
+  s.settings.focus = 25;
+  s.settings.short = 5;
+  s.settings.long = 15;
+  s.settings.cycles = 4;
+  s.settings.autoBreak = true;
+  s.settings.autoFocus = true;
+
+  let now = 1000;
+  for (let session = 1; session <= 4; session++) {
+    if (session === 1) {
+      startPhase(s, now, "focus");
+    }
+    assert.equal(s.timer!.phase, "focus");
+    assert.equal((s.completedCycle % s.settings.cycles) + 1, session);
+
+    now += 25 * 60000;
+    reconcile(s, now, true);
+
+    assert.equal(s.timer!.phase, "short");
+    assert.equal((s.completedCycle % s.settings.cycles) + 1, session);
+
+    now += 5 * 60000;
+    reconcile(s, now, true);
+
+    if (session < 4) {
+      assert.equal(s.timer!.phase, "focus");
+      assert.equal((s.completedCycle % s.settings.cycles) + 1, session + 1);
+    } else {
+      assert.equal(s.timer!.phase, "long");
+      assert.equal(s.completedCycle, 4);
+      assert.equal(nextPhase(s), "focus");
+    }
+  }
+
+  now += 15 * 60000;
+  reconcile(s, now, true);
+  assert.equal(s.timer!.phase, "focus");
+  assert.equal((s.completedCycle % s.settings.cycles) + 1, 1);
 });
 test("reconciliation and checkpoint edits are idempotent", () => {
   const s = defaults();

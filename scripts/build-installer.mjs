@@ -1,9 +1,10 @@
 import { createWindowsInstaller } from "electron-winstaller";
 import path from "node:path";
-import { mkdir } from "node:fs/promises";
+import { rm, mkdir } from "node:fs/promises";
 
 async function buildInstaller() {
   const outputDir = path.resolve("desktop-output/installer");
+  await rm(outputDir, { recursive: true, force: true });
   await mkdir(outputDir, { recursive: true });
   console.log("Packaging Windows installer setup file (Pacana-Setup.exe)...");
   await createWindowsInstaller({

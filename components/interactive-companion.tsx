@@ -6,7 +6,7 @@ import CapyLeaf from "./capy-leaf";
 import CapyEmoteBubble from "./capy-emote-bubble";
 import CapyMenu from "./capy-menu";
 import { playCompanionSound } from "../lib/companion-sound";
-import { useAutonomousCapy } from "../lib/capy-npc/autonomous-controller";
+import { useAutonomousCapy, EmoteType } from "../lib/capy-npc/autonomous-controller";
 import { Home, Move } from "lucide-react";
 
 interface InteractiveCompanionProps {
@@ -131,6 +131,23 @@ export default function InteractiveCompanion({
     facing: "left" | "right";
   } | null>(null);
 
+  // Track real-time status of floating companion
+  const [floatingStatus, setFloatingStatus] = useState<{
+    mode: string;
+    goal: string;
+  }>({ mode: "wander", goal: "wander" });
+
+  useEffect(() => {
+    const handleStatus = (e: Event) => {
+      const ce = e as CustomEvent<{ mode: string; goal: string }>;
+      if (ce.detail) {
+        setFloatingStatus(ce.detail);
+      }
+    };
+    window.addEventListener("pacana:cappy-status", handleStatus);
+    return () => window.removeEventListener("pacana:cappy-status", handleStatus);
+  }, []);
+
   // Initialize saved position from localStorage or props
   const [initialPos] = useState(() => {
     const defaultX = Math.round((typeof window !== "undefined" ? window.innerWidth : 1200) * 0.45);
@@ -199,6 +216,25 @@ export default function InteractiveCompanion({
   useEffect(() => {
     if (!isDockedContainer) return;
 
+    // Start background growth for the cushion plant if it's currently planted or sprouting
+    if (
+      cushionSeedState.stage !== "none" &&
+      cushionSeedState.stage !== "ready" &&
+      cushionSeedState.stage !== "being_eaten"
+    ) {
+      if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
+      let currentStage = cushionSeedState.treeStage || 2;
+      growthIntervalRef.current = setInterval(() => {
+        currentStage += 1;
+        if (currentStage >= 10) {
+          if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
+          updateCushionSeed("ready", 10);
+        } else {
+          updateCushionSeed("sprouting", currentStage);
+        }
+      }, 400);
+    }
+
     const handleDraggedOut = () => {
       updateCushionSeed("none", 1);
       if (fallTimerRef.current) clearTimeout(fallTimerRef.current);
@@ -209,39 +245,34 @@ export default function InteractiveCompanion({
         playCompanionSound("pop");
         setTimeout(() => {
           updateCushionSeed("planted", 2);
+          let currentStage = 2;
+          if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
+          growthIntervalRef.current = setInterval(() => {
+            currentStage += 1;
+            if (currentStage >= 10) {
+              if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
+              updateCushionSeed("ready", 10);
+            } else {
+              updateCushionSeed("sprouting", currentStage);
+            }
+          }, 400);
         }, 450);
       }, 1400);
     };
 
     const handleCallHome = () => {
-      if (fallTimerRef.current) clearTimeout(fallTimerRef.current);
-      if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
-
-      updateCushionSeed("sprouting", 1);
-      playCompanionSound("pop");
-
-      let currentStep = 1;
-      growthIntervalRef.current = setInterval(() => {
-        currentStep += 1;
-        if (currentStep >= 10) {
-          if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
-          updateCushionSeed("ready", 10);
-        } else {
-          updateCushionSeed("sprouting", currentStep);
-          if (currentStep === 5 || currentStep === 8) {
-            playCompanionSound("pop");
-          }
-        }
-      }, 120);
+      // Handled by floating companion navigation
     };
 
     const handleArrivedHome = () => {
       if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
-      updateCushionSeed("being_eaten", 10);
-      playCompanionSound("snack");
-      setTimeout(() => {
-        updateCushionSeed("none", 1);
-      }, 1100);
+      if (sharedCushionSeedStage !== "none") {
+        updateCushionSeed("being_eaten", sharedCushionTreeStage);
+        playCompanionSound("snack");
+        setTimeout(() => {
+          updateCushionSeed("none", 1);
+        }, 1200);
+      }
     };
 
     window.addEventListener("pacana:cappy-dragged-out", handleDraggedOut);
@@ -255,34 +286,29 @@ export default function InteractiveCompanion({
       window.removeEventListener("pacana:call-cappy-home", handleCallHome);
       window.removeEventListener("pacana:cappy-arrived-home", handleArrivedHome);
     };
-  }, [isDockedContainer]);
+  }, [isDockedContainer, cushionSeedState.stage, cushionSeedState.treeStage]);
 
-  // Handle timer completion shouting animation (for both docked cushion and floating companion)
-  useEffect(() => {
-    if (externalPose === "shout") {
-      if (!isFloating) {
-        setDockedPose("shout");
-      } else {
-        npc.startShouting();
-      }
-    }
-  }, [externalPose, isFloating, npc]);
+  // Handle timer completion shouting animation (for docked cushion only; floating Cappy is handled by autonomous-controller)
+  const lastHandledTimerRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const handleTimerComplete = () => {
-      if (!isFloating) {
+    const handleTimerComplete = (e: Event) => {
+      const ce = e as CustomEvent<{ timerId?: string }>;
+      const timerId = ce.detail?.timerId || `timer-${Date.now()}`;
+      if (lastHandledTimerRef.current === timerId) return;
+      lastHandledTimerRef.current = timerId;
+
+      if (isDockedContainer) {
         setDockedPose("shout");
-      } else {
-        npc.startShouting();
       }
     };
     window.addEventListener("pacana:timer-complete", handleTimerComplete);
     return () => {
       window.removeEventListener("pacana:timer-complete", handleTimerComplete);
     };
-  }, [isFloating, npc]);
+  }, [isDockedContainer]);
 
-  // Floating Cappy: Listen for Call Capy Home
+  // Floating Cappy: Listen for Call Capy Home & Navigation Commands
   useEffect(() => {
     if (!isFloating || isDockedContainer) return;
 
@@ -290,8 +316,7 @@ export default function InteractiveCompanion({
       if (
         npc.mode === "walk_home" ||
         npc.mode === "eating" ||
-        npc.mode === "walk_to_focus" ||
-        npc.mode === "focusing"
+        npc.mode === "walk_to_snack"
       ) {
         return;
       }
@@ -300,15 +325,37 @@ export default function InteractiveCompanion({
         npc.wakeUp();
       }
 
-      // Mark the cushion seed as ready so when the Focus tab is displayed, the grown plant is waiting!
-      sharedCushionSeedStage = "ready";
-      sharedCushionTreeStage = 10;
-      updateCushionSeed("ready", 10);
+      // Speed up tree growth so the tree visibly and rapidly grows to stage 10 before Cappy arrives!
+      if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
+      if (sharedCushionSeedStage === "none") {
+        updateCushionSeed("planted", 2);
+      }
+      let currentStage = sharedCushionTreeStage || 2;
+      if (currentStage < 10) {
+        growthIntervalRef.current = setInterval(() => {
+          currentStage += 1;
+          if (currentStage >= 10) {
+            if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
+            updateCushionSeed("ready", 10);
+          } else {
+            updateCushionSeed("sprouting", currentStage);
+          }
+        }, 150);
+      } else {
+        updateCushionSeed("ready", 10);
+      }
 
-      const walkToCushionAndEat = () => {
+      const focusTabBtn =
+        (document.querySelector('[data-capybara-target="nav-focus"]') as HTMLElement | null) ||
+        (document.querySelector('button[data-tab="Focus"]') as HTMLElement | null);
+      const isAlreadyOnFocus =
+        focusTabBtn?.classList.contains("active") ||
+        !!document.querySelector(".empty-cushion");
+
+      const navigateToCushionAndEat = () => {
         const cushionEl =
-          document.querySelector(".empty-cushion") ||
-          document.querySelector(".docked-companion-empty");
+          document.querySelector(".docked-companion-empty") ||
+          document.querySelector(".empty-cushion");
         const cr = cushionEl?.getBoundingClientRect();
         const targetPos = cr
           ? {
@@ -323,74 +370,55 @@ export default function InteractiveCompanion({
               y: 350,
             };
 
-        npc.triggerEmote("excited", 1400);
-        playCompanionSound("pop");
-
+        // Cappy physically moves across the screen towards the home cushion
         npc.walkToPoint(targetPos, () => {
-          // Arrived at home cushion!
-          window.dispatchEvent(new CustomEvent("pacana:cappy-arrived-home"));
-          updateCushionSeed("being_eaten", 10);
+          // Tree is guaranteed to be fully grown when Cappy gets to the tree!
+          if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
+          updateCushionSeed("ready", 10);
 
-          // Multi-stage eating sequence at the cushion
-          npc.setMode("eating");
-          npc.setPose("bite");
-          npc.triggerEmote("eating", 1300);
-          playCompanionSound("snack");
-
-          setTimeout(() => {
-            npc.setPose("snack");
+          // Check whether there are leaves/plant on the cushion
+          if (sharedCushionSeedStage !== "none") {
+            window.dispatchEvent(new CustomEvent("pacana:cappy-arrived-home"));
+            updateCushionSeed("being_eaten", 10);
+            npc.setMode("eating");
+            npc.setPose("eating");
             playCompanionSound("snack");
-          }, 350);
 
-          setTimeout(() => {
-            npc.setPose("bite");
-          }, 700);
-
-          setTimeout(() => {
-            updateCushionSeed("none", 1);
+            setTimeout(() => {
+              updateCushionSeed("none", 1);
+              npc.setPose("idle");
+              setDockedPose("idle");
+              onToggleFloating(false);
+            }, 1200);
+          } else {
+            // No plant on cushion: return directly to idle position on the cushion
+            window.dispatchEvent(new CustomEvent("pacana:cappy-arrived-home"));
             npc.setPose("idle");
-            npc.triggerEmote("happy", 900);
-            playCompanionSound("pet");
-          }, 1000);
-
-          // Fully dock Cappy onto the cushion after eating!
-          setTimeout(() => {
+            setDockedPose("idle");
             onToggleFloating(false);
-          }, 1250);
+          }
         });
       };
 
-      // Check if user is currently on the Focus tab
-      const focusNavBtn = (document.querySelector(
-        '[data-capybara-target="nav-focus"]'
-      ) ||
-        document.querySelector('button[data-tab="Focus"]')) as HTMLElement | null;
-      const isAlreadyOnFocus =
-        !!document.querySelector(".empty-cushion") ||
-        focusNavBtn?.classList.contains("active");
-
-      if (isAlreadyOnFocus) {
-        // Already on Focus tab: cushion with grown plant is right here on the right!
-        walkToCushionAndEat();
-      } else {
-        // On another tab (Check-ins, Journal, Progress, Settings):
-        // Cappy walks to the sidebar Focus button, presses it to switch to Focus tab,
-        // then walks across to the right to see the grown plant, eats its leaf, and docks!
-        npc.triggerEmote("curious", 1000);
-        playCompanionSound("pop");
-
+      if (!isAlreadyOnFocus) {
+        // Go to focus tab first to change to first tab!
         npc.startPressFocus(
-          focusNavBtn || '[data-capybara-target="nav-focus"]',
+          '[data-capybara-target="nav-focus"], button[data-tab="Focus"]',
           () => {
-            // Paw press completed and tab has switched to Focus!
-            // Wait brief tick for Focus tab layout to mount .empty-cushion
-            setTimeout(() => {
-              npc.setFacing("right");
-              walkToCushionAndEat();
-            }, 120);
+            // Now on first tab: give DOM 150ms to render cushion, then navigate and eat!
+            setTimeout(navigateToCushionAndEat, 150);
           }
         );
+      } else {
+        // Already on Focus tab: go directly to cushion, eat leaves and become idle
+        navigateToCushionAndEat();
       }
+    };
+
+    const handleCancelToWander = () => {
+      npc.setPose("walk");
+      npc.setMode("wander");
+      npc.planNextWander();
     };
 
     const handlePressFocus = () => {
@@ -417,20 +445,31 @@ export default function InteractiveCompanion({
       npc.toggleSleep();
     };
 
+    const handleTriggerEmote = (e: Event) => {
+      const ce = e as CustomEvent<{ type: EmoteType }>;
+      if (ce.detail?.type) {
+        npc.triggerEmote(ce.detail.type);
+      }
+    };
+
     window.addEventListener("pacana:call-cappy-home", handleCallHome);
+    window.addEventListener("pacana:cancel-to-wander", handleCancelToWander);
     window.addEventListener("pacana:press-focus", handlePressFocus);
     window.addEventListener("pacana:plant-snack", handlePlantSnack);
     window.addEventListener("pacana:cappy-wake", handleWake);
     window.addEventListener("pacana:cappy-sleep", handleSleep);
+    window.addEventListener("pacana:trigger-emote", handleTriggerEmote);
 
     return () => {
       window.removeEventListener("pacana:call-cappy-home", handleCallHome);
+      window.removeEventListener("pacana:cancel-to-wander", handleCancelToWander);
       window.removeEventListener("pacana:press-focus", handlePressFocus);
       window.removeEventListener("pacana:plant-snack", handlePlantSnack);
       window.removeEventListener("pacana:cappy-wake", handleWake);
       window.removeEventListener("pacana:cappy-sleep", handleSleep);
+      window.removeEventListener("pacana:trigger-emote", handleTriggerEmote);
     };
-  }, [isFloating, isDockedContainer, npc, onToggleFloating]);
+  }, [isFloating, isDockedContainer, npc, onToggleFloating, cushionSeedState]);
 
   // Idle cycle while docked on cushion: naturally alternates between sleeping and reading a book
   useEffect(() => {
@@ -628,11 +667,6 @@ export default function InteractiveCompanion({
 
   // A. If this is the docked container, and Capy is exploring the screen:
   if (isDockedContainer && isFloating) {
-    const isBusyGrowingOrEaten =
-      cushionSeedState.stage === "sprouting" ||
-      cushionSeedState.stage === "ready" ||
-      cushionSeedState.stage === "being_eaten";
-
     return (
       <div className="docked-companion-empty" data-capybara-target="home">
         <div className="docked-companion-stage">
@@ -649,17 +683,51 @@ export default function InteractiveCompanion({
           </div>
         </div>
         <div className="docked-actions">
-          <button
-            type="button"
-            className="dock-call-btn"
-            disabled={isBusyGrowingOrEaten}
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent("pacana:call-cappy-home"));
-            }}
-          >
-            <Home size={13} />
-            <span>{isBusyGrowingOrEaten ? "Capy is on the way..." : "Call Capy home"}</span>
-          </button>
+          {floatingStatus.mode === "walk_home" ? (
+            <button
+              type="button"
+              className="dock-call-btn is-active"
+              title="Click to cancel and let Cappy wander"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("pacana:cancel-to-wander"));
+              }}
+            >
+              <Move size={13} />
+              <span>Capy is on the way...</span>
+            </button>
+          ) : floatingStatus.mode === "resting" ? (
+            <button
+              type="button"
+              className="dock-call-btn"
+              title="Click to wake Cappy"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("pacana:cappy-wake"));
+              }}
+            >
+              <Home size={13} />
+              <span>Capy is resting...</span>
+            </button>
+          ) : floatingStatus.mode === "walk_to_snack" || floatingStatus.mode === "eating" ? (
+            <button
+              type="button"
+              className="dock-call-btn"
+              disabled
+            >
+              <Home size={13} />
+              <span>Capy is getting his snack...</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="dock-call-btn"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("pacana:call-cappy-home"));
+              }}
+            >
+              <Home size={13} />
+              <span>Call Capy home</span>
+            </button>
+          )}
         </div>
       </div>
     );
@@ -706,10 +774,7 @@ export default function InteractiveCompanion({
                 isFloating={false}
                 onAnimationComplete={() => {
                   if (dockedPose === "shout") {
-                    setDockedPose("happy");
-                    setTimeout(() => {
-                      setDockedPose(Math.random() < 0.5 ? "sleep" : "read");
-                    }, 800);
+                    setDockedPose("idle");
                   } else if (dockedPose === "plant") {
                     // Planting animation completed through all 8 frames to plant-8.png (the sprout is planted!)
                     updateCushionSeed("planted", 2);
@@ -880,7 +945,7 @@ export default function InteractiveCompanion({
                 });
               }}
             >
-              <Home size={11} />
+              <Home size={18} strokeWidth={2.2} />
             </button>
           </div>
         )}

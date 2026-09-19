@@ -38,6 +38,10 @@ interface AnimationConfig {
   frames: string[];
   intervalMs: number;
   loop: boolean;
+  spriteSheet?: {
+    src: string;
+    frameCount: number;
+  };
 }
 
 const ANIMATION_SEQUENCES: Partial<Record<CapyPose, AnimationConfig>> = {
@@ -105,10 +109,14 @@ const ANIMATION_SEQUENCES: Partial<Record<CapyPose, AnimationConfig>> = {
     loop: false,
   },
   shout: {
-    // 8 frames: walks to mic, opens mouth, shouts into mic with sound sparks, catches breath, stands proud
-    frames: Array.from({ length: 8 }, (_, i) => `/art/cappy/shout-${i + 1}.png`),
-    intervalMs: 120,
+    // 7 frames from microphone-sheet.png: walks to mic, sings with microphone, stops on frame 7
+    frames: Array.from({ length: 7 }, (_, i) => `/art/cappy/shout-${i + 1}.png`),
+    intervalMs: 125,
     loop: false,
+    spriteSheet: {
+      src: "/art/cappy/microphone-sheet.png",
+      frameCount: 7,
+    },
   },
 };
 
@@ -131,7 +139,8 @@ const ALL_PRELOAD_IMAGES: string[] = [
   ...Array.from({ length: 10 }, (_, i) => `/art/cappy/sleep-${i + 1}.png`),
   ...Array.from({ length: 8 }, (_, i) => `/art/cappy/plant-${i + 1}.png`),
   ...Array.from({ length: 8 }, (_, i) => `/art/cappy/curious-${i + 1}.png`),
-  ...Array.from({ length: 8 }, (_, i) => `/art/cappy/shout-${i + 1}.png`),
+  ...Array.from({ length: 7 }, (_, i) => `/art/cappy/shout-${i + 1}.png`),
+  "/art/cappy/microphone-sheet.png",
   "/art/cappy/rest.png",
   "/art/capy-drag.png",
   "/art/capy-sprout.png",
@@ -187,6 +196,7 @@ export default function CapySprite({
   const isSoundPlayingRef = useRef(false);
   const soundDurationRef = useRef(3000);
   const soundStartTimeRef = useRef(0);
+  const soundEndedCallbacksRef = useRef<(() => void)[]>([]);
 
   // When pose is "shout", track whether sound is playing and synchronize dynamic animation
   useEffect(() => {
@@ -198,6 +208,9 @@ export default function CapySprite({
 
     let fallbackTimer = setTimeout(() => {
       isSoundPlayingRef.current = false;
+      const cbs = [...soundEndedCallbacksRef.current];
+      soundEndedCallbacksRef.current = [];
+      cbs.forEach((cb) => cb());
     }, 15000);
 
     const handleSoundStarted = (e: Event) => {
@@ -210,11 +223,17 @@ export default function CapySprite({
         soundDurationRef.current = dur;
         fallbackTimer = setTimeout(() => {
           isSoundPlayingRef.current = false;
+          const cbs = [...soundEndedCallbacksRef.current];
+          soundEndedCallbacksRef.current = [];
+          cbs.forEach((cb) => cb());
         }, dur + 100);
       } else {
         soundDurationRef.current = 3000;
         fallbackTimer = setTimeout(() => {
           isSoundPlayingRef.current = false;
+          const cbs = [...soundEndedCallbacksRef.current];
+          soundEndedCallbacksRef.current = [];
+          cbs.forEach((cb) => cb());
         }, 3500);
       }
     };
@@ -222,6 +241,9 @@ export default function CapySprite({
     const handleSoundEnded = () => {
       clearTimeout(fallbackTimer);
       isSoundPlayingRef.current = false;
+      const cbs = [...soundEndedCallbacksRef.current];
+      soundEndedCallbacksRef.current = [];
+      cbs.forEach((cb) => cb());
     };
 
     window.addEventListener("pacana:sound-started", handleSoundStarted);
@@ -229,6 +251,7 @@ export default function CapySprite({
 
     return () => {
       clearTimeout(fallbackTimer);
+      soundEndedCallbacksRef.current = [];
       window.removeEventListener("pacana:sound-started", handleSoundStarted);
       window.removeEventListener("pacana:sound-ended", handleSoundEnded);
     };
@@ -253,48 +276,45 @@ export default function CapySprite({
       if (onFrameRef.current) onFrameRef.current(0);
     }, 0);
 
-    // Dynamic audio synchronization for long audio animations (e.g. shout)
+    // Dedicated microphone animation for timer completion:
+    // Plays Frame 1 -> Frame 2 -> ... -> Frame 7 ONCE.
+    // Holds Frame 7 if audio is still playing.
+    // When audio finishes, completes animation and returns to normal behavior.
     if (pose === "shout") {
-      const startTime = Date.now();
-      const tickRate = 45; // Smooth ~22-30fps updates
+      let currentFrame = 0;
+      setFrameIdx(0);
+      if (onFrameRef.current) onFrameRef.current(0);
 
-      const interval = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const totalDuration = soundDurationRef.current || 3000;
-        // Final portion: 5 frames (indices 3..7) taking approximately 1.2s - 1.8s
-        const finalDuration = Math.min(1800, Math.max(800, totalDuration * 0.4));
-        const loopUntil = Math.max(0, totalDuration - finalDuration);
+      const frameInterval = setInterval(() => {
+        currentFrame += 1;
+        if (currentFrame >= 6) {
+          // Reached Frame 7 (index 6). Stop advancing!
+          clearInterval(frameInterval);
+          setFrameIdx(6);
+          if (onFrameRef.current) onFrameRef.current(6);
 
-        if (elapsed < loopUntil && isSoundPlayingRef.current) {
-          // A. 3-frame subtle idle loop: Frame 1 -> 2 -> 3 -> 2 -> 1...
-          const idleFrames = [0, 1, 2, 1];
-          const idleStep = Math.floor(elapsed / 140) % idleFrames.length;
-          const frame = idleFrames[idleStep];
-          setFrameIdx(frame);
-          if (onFrameRef.current) onFrameRef.current(frame);
-        } else {
-          // B. Final audio-sync portion: play remaining frames sequentially to the climax
-          const finalFrames = [3, 4, 5, 6, 7];
-          const finalElapsed = elapsed - loopUntil;
-          const finalStep = Math.min(
-            finalFrames.length - 1,
-            Math.floor((finalElapsed / finalDuration) * finalFrames.length),
-          );
-          const frame = finalFrames[finalStep];
-          setFrameIdx(frame);
-          if (onFrameRef.current) onFrameRef.current(frame);
+          const finishAnimation = () => {
+            if (onAnimationCompleteRef.current) {
+              onAnimationCompleteRef.current();
+            }
+          };
 
-          // Synchronize ending: finish exactly when audio ends or time expires
-          if (!isSoundPlayingRef.current || elapsed >= totalDuration) {
-            clearInterval(interval);
-            setFrameIdx(7);
-            if (onFrameRef.current) onFrameRef.current(7);
-            if (onAnimationCompleteRef.current) onAnimationCompleteRef.current();
+          // If sound is already done or not playing, finish now.
+          // Otherwise, hold Frame 7 until audio finishes!
+          if (!isSoundPlayingRef.current) {
+            setTimeout(finishAnimation, 250);
+          } else {
+            soundEndedCallbacksRef.current.push(finishAnimation);
           }
+        } else {
+          setFrameIdx(currentFrame);
+          if (onFrameRef.current) onFrameRef.current(currentFrame);
         }
-      }, tickRate);
+      }, config.intervalMs);
 
-      return () => clearInterval(interval);
+      return () => {
+        clearInterval(frameInterval);
+      };
     }
 
     // Standard sequence loop for other animations
@@ -395,13 +415,49 @@ export default function CapySprite({
       >
         <div
           className={`capy-sprite-wrapper ${pose === "walk" ? "is-walking" : ""}`}
+          style={{
+            position: "relative",
+            width: "100%",
+            height: "100%",
+            overflow: "hidden",
+          }}
         >
-          <img
-            src={imageSrc}
-            alt={`Cute Capybara Companion (${pose})`}
-            className="capy-image"
-            draggable={false}
-          />
+          {activeConfig?.spriteSheet ? (
+            <div
+              className="capy-sprite-viewport"
+              style={{
+                position: "relative",
+                width: "100%",
+                height: "100%",
+                overflow: "hidden",
+              }}
+            >
+              <img
+                src={activeConfig.spriteSheet.src}
+                alt={`Cute Capybara Companion (${pose})`}
+                className="capy-spritesheet-image"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  height: "100%",
+                  width: `${activeConfig.spriteSheet.frameCount * 100}%`,
+                  maxWidth: "none",
+                  transform: `translateX(-${(Math.min(frameIdx, activeConfig.spriteSheet.frameCount - 1) * 100) / activeConfig.spriteSheet.frameCount}%)`,
+                  pointerEvents: "none",
+                  filter: "drop-shadow(0 4px 10px rgba(35, 45, 30, 0.12))",
+                }}
+                draggable={false}
+              />
+            </div>
+          ) : (
+            <img
+              src={imageSrc}
+              alt={`Cute Capybara Companion (${pose})`}
+              className="capy-image"
+              draggable={false}
+            />
+          )}
         </div>
       </div>
     </div>

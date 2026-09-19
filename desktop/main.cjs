@@ -1,6 +1,11 @@
 try {
-  if (require("electron-squirrel-startup")) return;
-} catch {}
+  const checkSquirrelStartup = require("./squirrel-startup.cjs");
+  if (checkSquirrelStartup()) return;
+} catch {
+  try {
+    if (require("electron-squirrel-startup")) return;
+  } catch {}
+}
 const {
   app,
   BrowserWindow,
