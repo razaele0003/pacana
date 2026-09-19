@@ -139,29 +139,36 @@ export function useAutonomousCapy({
     viewportRef.current = viewport;
   }, []);
 
-  // Temporary Emote Trigger (~0.8 - 1.2s)
+  // Temporary Emote Trigger (~0.8 - 1.2s) - Only thinking emoji displays per user request
   const triggerEmote = useCallback(
     (type: EmoteType, duration = 1100) => {
       if (emoteTimerRef.current) clearTimeout(emoteTimerRef.current);
-      const emote: ActiveEmote = {
-        type,
-        id: `emote-${Date.now()}-${Math.random()}`,
-        duration,
-      };
-      setActiveEmote(emote);
+
+      if (type === "thinking") {
+        const emote: ActiveEmote = {
+          type,
+          id: `emote-${Date.now()}-${Math.random()}`,
+          duration,
+        };
+        setActiveEmote(emote);
+
+        if (duration > 0) {
+          emoteTimerRef.current = setTimeout(() => {
+            setActiveEmote((cur) => (cur?.id === emote.id ? null : cur));
+          }, duration);
+        }
+      } else {
+        setActiveEmote(null);
+      }
 
       if (type === "happy") {
         setShowHearts(true);
         playCompanionSound("pet");
+        if (duration > 0) {
+          setTimeout(() => setShowHearts(false), duration);
+        }
       } else if (type === "curious" || type === "excited" || type === "snack") {
         playCompanionSound("pop");
-      }
-
-      if (duration > 0) {
-        emoteTimerRef.current = setTimeout(() => {
-          setActiveEmote((cur) => (cur?.id === emote.id ? null : cur));
-          if (type === "happy") setShowHearts(false);
-        }, duration);
       }
     },
     []
