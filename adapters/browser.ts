@@ -43,28 +43,30 @@ function notifySoundEnded() {
 }
 
 async function playAudioFile(url: string) {
-  // 1. Primary: Web Audio API BufferSource
-  try {
-    const source = audio!.createBufferSource();
-    const buffer = await loadCustom(url);
-    if (buffer) {
-      source.buffer = buffer;
-      source.connect(audio!.destination);
-      source.onended = () => {
-        source.disconnect();
-        playing = playing.filter((x) => x !== source);
-        notifySoundEnded();
-      };
-      playing.push(source);
-      notifySoundStarted(buffer.duration * 1000);
-      source.start();
-      return;
+  // 1. Primary: Web Audio API BufferSource (if context is running)
+  if (audio && audio.state === "running") {
+    try {
+      const source = audio.createBufferSource();
+      const buffer = await loadCustom(url);
+      if (buffer) {
+        source.buffer = buffer;
+        source.connect(audio.destination);
+        source.onended = () => {
+          source.disconnect();
+          playing = playing.filter((x) => x !== source);
+          notifySoundEnded();
+        };
+        playing.push(source);
+        notifySoundStarted(buffer.duration * 1000);
+        source.start();
+        return;
+      }
+    } catch (webAudioErr) {
+      console.warn(
+        "[Pacana Audio] Web Audio API failed, falling back to HTMLAudioElement:",
+        webAudioErr,
+      );
     }
-  } catch (webAudioErr) {
-    console.warn(
-      "[Pacana Audio] Web Audio API failed, falling back to HTMLAudioElement:",
-      webAudioErr,
-    );
   }
 
   // 2. Secondary Fallback: Standard HTML5 Audio Element
@@ -73,6 +75,11 @@ async function playAudioFile(url: string) {
     audioEl.onended = () => {
       playing = playing.filter((x) => x !== audioEl);
       notifySoundEnded();
+    };
+    audioEl.onloadedmetadata = () => {
+      if (audioEl.duration && isFinite(audioEl.duration)) {
+        notifySoundStarted(audioEl.duration * 1000);
+      }
     };
     playing.push(audioEl);
     notifySoundStarted();
@@ -88,9 +95,13 @@ async function playAudioFile(url: string) {
 }
 
 async function playRingtone(settings: Settings) {
-  audio ??= new AudioContext();
-  if (audio.state !== "running") await audio.resume();
-  if (audio.state !== "running") throw new Error("Audio context could not start.");
+  try {
+    audio ??= new AudioContext();
+    if (audio.state !== "running") await audio.resume();
+  } catch (e) {
+    console.warn("[Pacana Audio] AudioContext init/resume failed:", e);
+  }
+
   for (const item of playing) {
     try {
       if ("stop" in item) {
@@ -117,6 +128,15 @@ async function playRingtone(settings: Settings) {
   }
 
   if ("notes" in chosen && chosen.notes) {
+    if (!audio || audio.state !== "running") {
+      try {
+        audio ??= new AudioContext();
+        await audio.resume();
+      } catch {}
+    }
+    if (!audio || audio.state !== "running") {
+      throw new Error("Audio context could not start.");
+    }
     const context = audio;
     const totalDuration =
       (chosen.notes.length - 1) * chosen.step + chosen.length;

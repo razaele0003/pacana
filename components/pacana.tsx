@@ -273,6 +273,7 @@ export default function Pacana() {
   }, [fullscreen]);
   const lastTick = useRef(0),
     busy = useRef(false);
+  const completionPlayedRef = useRef<string | null>(null);
   const time = (ts: number) =>
     new Intl.DateTimeFormat("en", {
       timeZone: state?.settings.timezone,
@@ -320,6 +321,13 @@ export default function Pacana() {
 
             if (result.completed) {
               const completedTimer = s.timer;
+              const timerId = completedTimer?.id;
+              if (timerId && completionPlayedRef.current === timerId) {
+                return;
+              }
+              if (timerId) {
+                completionPlayedRef.current = timerId;
+              }
               const completedPhase = completedTimer?.phase;
               const shouldAutoStart =
                 auto &&

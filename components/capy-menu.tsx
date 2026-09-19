@@ -56,7 +56,7 @@ export default function CapyMenu({
         <span className="menu-emoji">❤️</span>
       </button>
 
-      {/* 4. Curious emote */}
+      {/* 3. Curious emote */}
       <button
         type="button"
         className="capy-menu-btn"
@@ -68,6 +68,20 @@ export default function CapyMenu({
         }}
       >
         <span className="menu-emoji">✨</span>
+      </button>
+
+      {/* 4. Reading interaction */}
+      <button
+        type="button"
+        className="capy-menu-btn"
+        title="Read (cozy book reading)"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelectEmote("reading");
+        }}
+      >
+        <span className="menu-emoji">📖</span>
       </button>
 
       {/* 5. Rest / Wake toggle */}

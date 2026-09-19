@@ -83,9 +83,9 @@ const ANIMATION_SEQUENCES: Partial<Record<CapyPose, AnimationConfig>> = {
     loop: false,
   },
   curious: {
-    // 8 frames for star emoji: sings into mic with sound sparks
-    frames: Array.from({ length: 8 }, (_, i) => `/art/cappy/shout-${i + 1}.png`),
-    intervalMs: 120,
+    // 8 frames for star emoji: notice, slow down, look forward, head tilt, curious peek, sparkle appears, short hold, return
+    frames: Array.from({ length: 8 }, (_, i) => `/art/cappy/curious-${i + 1}.png`),
+    intervalMs: 115, // ~0.9s total
     loop: false,
   },
   excited: {
@@ -130,6 +130,7 @@ const ALL_PRELOAD_IMAGES: string[] = [
   ...Array.from({ length: 10 }, (_, i) => `/art/cappy/read-${i + 1}.png`),
   ...Array.from({ length: 10 }, (_, i) => `/art/cappy/sleep-${i + 1}.png`),
   ...Array.from({ length: 8 }, (_, i) => `/art/cappy/plant-${i + 1}.png`),
+  ...Array.from({ length: 8 }, (_, i) => `/art/cappy/curious-${i + 1}.png`),
   ...Array.from({ length: 8 }, (_, i) => `/art/cappy/shout-${i + 1}.png`),
   "/art/cappy/rest.png",
   "/art/capy-drag.png",

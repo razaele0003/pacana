@@ -25,6 +25,8 @@ export type CompanionMode =
   | "planting"
   | "thinking"
   | "reading"
+  | "curious"
+  | "happy"
   | "shouting"
   | "idle";
 
@@ -105,6 +107,7 @@ export function useAutonomousCapy({
   const sleepTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastMovedPosRef = useRef<Point>({ x: 0, y: 0 });
   const stalledFramesCountRef = useRef<number>(0);
+  const resumeGoalRef = useRef<() => void>(() => {});
 
   const changeMode = useCallback((newMode: CompanionMode) => {
     modeRef.current = newMode;
@@ -122,10 +125,7 @@ export function useAutonomousCapy({
         if (modeRef.current === "eating") {
           setActiveLeaf(null);
           currentGoalRef.current = "wander";
-          modeRef.current = "wander";
-          setMode("wander");
-          setPose("walk");
-          planNextWanderRef.current();
+          resumeGoalRef.current();
         }
       }, 2500);
     } else if (newMode === "focusing") {
@@ -133,32 +133,26 @@ export function useAutonomousCapy({
         actionTimeoutRef.current = null;
         if (modeRef.current === "focusing") {
           currentGoalRef.current = "wander";
-          modeRef.current = "wander";
-          setMode("wander");
-          setPose("walk");
-          planNextWanderRef.current();
+          resumeGoalRef.current();
         }
       }, 2500);
-    } else if (newMode === "reading" || newMode === "thinking") {
+    } else if (
+      newMode === "reading" ||
+      newMode === "thinking" ||
+      newMode === "curious" ||
+      newMode === "happy"
+    ) {
       actionTimeoutRef.current = setTimeout(() => {
         actionTimeoutRef.current = null;
-        if (modeRef.current === "reading" || modeRef.current === "thinking") {
-          currentGoalRef.current = "wander";
-          modeRef.current = "wander";
-          setMode("wander");
-          setPose("walk");
-          planNextWanderRef.current();
+        if (modeRef.current === newMode) {
+          resumeGoalRef.current();
         }
       }, 3500);
     } else if (newMode === "waking") {
       actionTimeoutRef.current = setTimeout(() => {
         actionTimeoutRef.current = null;
         if (modeRef.current === "waking") {
-          currentGoalRef.current = "wander";
-          modeRef.current = "wander";
-          setMode("wander");
-          setPose("walk");
-          planNextWanderRef.current();
+          resumeGoalRef.current();
         }
       }, 2500);
     }
@@ -197,75 +191,66 @@ export function useAutonomousCapy({
     viewportRef.current = viewport;
   }, []);
 
-  // Temporary Emote Trigger (~0.8 - 2.2s) - thinking (💭) and reading (📖) emojis
+  // Temporary Emote Trigger (~0.8 - 2.4s) - stationary world position, preserves persistent goal!
   const triggerEmote = useCallback(
     (type: EmoteType, duration = 1100) => {
+      if (isDraggingRef.current) return;
+
       if (emoteTimerRef.current) {
         clearTimeout(emoteTimerRef.current);
         emoteTimerRef.current = null;
       }
-
-      if (type === "thinking" || type === "reading" || type === "read") {
-        const emote: ActiveEmote = {
-          type,
-          id: `emote-${Date.now()}-${Math.random()}`,
-          duration,
-        };
-        setActiveEmote(emote);
-
-        if (duration > 0) {
-          emoteTimerRef.current = setTimeout(() => {
-            emoteTimerRef.current = null;
-            setActiveEmote((cur) => (cur?.id === emote.id ? null : cur));
-
-            // After thinking or reading emoji finishes, continue roaming around the page!
-            if (
-              modeRef.current === "wander" ||
-              modeRef.current === "idle" ||
-              modeRef.current === "thinking" ||
-              modeRef.current === "reading"
-            ) {
-              currentGoalRef.current = "wander";
-              changeMode("wander");
-              setPose("walk");
-              planNextWanderRef.current();
-            }
-          }, duration);
-        }
-      } else {
-        setActiveEmote(null);
-
-        // If another emote was triggered (e.g. from pet or menu), ensure roaming resumes after duration
-        if (duration > 0) {
-          emoteTimerRef.current = setTimeout(() => {
-            emoteTimerRef.current = null;
-            if (
-              modeRef.current === "wander" ||
-              modeRef.current === "idle" ||
-              modeRef.current === "thinking" ||
-              modeRef.current === "reading"
-            ) {
-              currentGoalRef.current = "wander";
-              changeMode("wander");
-              setPose("walk");
-              planNextWanderRef.current();
-            }
-          }, duration);
-        }
+      if (transitionTimerRef.current) {
+        clearTimeout(transitionTimerRef.current);
+        transitionTimerRef.current = null;
       }
 
-      if (type === "happy") {
+      // Clear waypoints so Capy is completely stationary in world space
+      waypointsRef.current = [];
+
+      if (type === "curious") {
+        setPose("curious");
+        changeMode("curious");
+        setActiveEmote(null);
+        playCompanionSound("pop");
+      } else if (type === "reading" || type === "read") {
+        setPose("read");
+        changeMode("reading");
+        setActiveEmote({
+          type: "reading",
+          id: `emote-${Date.now()}-${Math.random()}`,
+          duration,
+        });
+      } else if (type === "happy") {
         setPose("happy");
+        changeMode("happy");
         setShowHearts(true);
+        setActiveEmote(null);
         playCompanionSound("pet");
         if (duration > 0) {
           setTimeout(() => setShowHearts(false), duration);
         }
-      } else if (type === "curious") {
-        setPose("curious");
-        playCompanionSound("pop");
+      } else if (type === "thinking") {
+        setPose("thinking");
+        changeMode("thinking");
+        setActiveEmote({
+          type: "thinking",
+          id: `emote-${Date.now()}-${Math.random()}`,
+          duration,
+        });
       } else if (type === "excited" || type === "snack") {
-        playCompanionSound("pop");
+        setPose("happy");
+        changeMode("happy");
+        setActiveEmote(null);
+        playCompanionSound("pet");
+      }
+
+      if (duration > 0) {
+        emoteTimerRef.current = setTimeout(() => {
+          emoteTimerRef.current = null;
+          setActiveEmote(null);
+          resumeGoalRef.current();
+        }, duration);
       }
     },
     [changeMode]
@@ -538,6 +523,64 @@ export function useAutonomousCapy({
     [refreshObstacles, triggerEmote, planNextWander, changeMode]
   );
 
+  // Resume persistent goal: calculates path to current persistent goal target
+  const resumeGoal = useCallback(() => {
+    if (isDraggingRef.current) return;
+    const goal = currentGoalRef.current;
+
+    // 1. Persistent Goal: Eat snack tree
+    if (
+      goal === "eat_snack" &&
+      activeLeafRef.current &&
+      activeLeafRef.current.stage === "ready" &&
+      !activeLeafRef.current.isBeingEaten
+    ) {
+      startApproachingReadyLeaf(activeLeafRef.current);
+      return;
+    }
+
+    // 2. Persistent Goal: Press focus button
+    if (goal === "press_focus") {
+      startPressFocus(
+        targetButtonElRef.current || undefined,
+        onFocusCompleteRef.current || undefined
+      );
+      return;
+    }
+
+    // 3. Persistent Goal: Go home to cushion
+    if (goal === "go_home") {
+      window.dispatchEvent(new CustomEvent("pacana:call-cappy-home"));
+      return;
+    }
+
+    // 4. Persistent Goal: Rest
+    if (goal === "rest") {
+      changeMode("resting");
+      setPose("sleep");
+      return;
+    }
+
+    // 5. If a ready tree exists anywhere on screen, eating it takes priority over random wander!
+    if (
+      activeLeafRef.current &&
+      activeLeafRef.current.stage === "ready" &&
+      !activeLeafRef.current.isBeingEaten
+    ) {
+      currentGoalRef.current = "eat_snack";
+      startApproachingReadyLeaf(activeLeafRef.current);
+      return;
+    }
+
+    // 6. Normal continuous wander
+    currentGoalRef.current = "wander";
+    changeMode("wander");
+    setPose("walk");
+    planNextWander();
+  }, [startApproachingReadyLeaf, startPressFocus, planNextWander, changeMode]);
+
+  resumeGoalRef.current = resumeGoal;
+
   // Autonomous wild tree growth: a seed spontaneously sprouts on screen for Cappy to find and eat
   const spawnWildTree = useCallback(() => {
     if (activeLeafRef.current || isDraggingRef.current) return;
@@ -580,6 +623,7 @@ export function useAutonomousCapy({
               stage: "ready",
               treeStage: 10,
             };
+            currentGoalRef.current = "eat_snack";
             startApproachingReadyLeaf(readyLeaf);
             return readyLeaf;
           }
@@ -595,9 +639,6 @@ export function useAutonomousCapy({
               }
             : curr
         );
-        if (step === 4 || step === 8) {
-          playCompanionSound("pop");
-        }
       }
     }, 140);
   }, [refreshObstacles, startApproachingReadyLeaf]);
@@ -629,57 +670,6 @@ export function useAutonomousCapy({
     setPose("shout");
   }, [changeMode]);
 
-  // Petting interaction (temporary reaction that DOES NOT cancel current goal!)
-  const triggerPet = useCallback(() => {
-    if (modeRef.current === "resting") {
-      // Waking up
-      changeMode("waking");
-      setPose("stretch");
-      playCompanionSound("pet");
-      return;
-    }
-
-    // Save active goal to resume after reaction!
-    if (
-      currentGoalRef.current !== "wander" &&
-      currentGoalRef.current !== "rest"
-    ) {
-      interruptedGoalRef.current = currentGoalRef.current;
-    }
-
-    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-    waypointsRef.current = [];
-    setPose("happy");
-    triggerEmote("happy", 1100);
-
-    transitionTimerRef.current = setTimeout(() => {
-      transitionTimerRef.current = null;
-      // Resume goal if interrupted!
-      if (interruptedGoalRef.current === "press_focus") {
-        interruptedGoalRef.current = null;
-        startPressFocus();
-      } else if (interruptedGoalRef.current === "plant") {
-        interruptedGoalRef.current = null;
-        spawnLeaf();
-      } else if (
-        interruptedGoalRef.current === "eat_snack" &&
-        activeLeafRef.current?.stage === "ready"
-      ) {
-        interruptedGoalRef.current = null;
-        startApproachingReadyLeaf(activeLeafRef.current);
-      } else if (interruptedGoalRef.current === "go_home") {
-        interruptedGoalRef.current = null;
-        window.dispatchEvent(new CustomEvent("pacana:call-cappy-home"));
-      } else {
-        interruptedGoalRef.current = null;
-        currentGoalRef.current = "wander";
-        changeMode("wander");
-        setPose("walk");
-        planNextWander();
-      }
-    }, 1100);
-  }, [triggerEmote, startPressFocus, startApproachingReadyLeaf, planNextWander, changeMode, spawnLeaf]);
-
   // Rest & Waking System
   const wakeUp = useCallback(() => {
     if (sleepTimerRef.current) {
@@ -691,6 +681,18 @@ export function useAutonomousCapy({
     setPose("stretch"); // 10-frame stretch wakeup from Stretch wakeup.png
     playCompanionSound("pet");
   }, [changeMode]);
+
+  // Petting interaction (temporary reaction that DOES NOT cancel current goal!)
+  const triggerPet = useCallback(() => {
+    if (modeRef.current === "resting") {
+      // Waking up
+      wakeUp();
+      return;
+    }
+
+    // Temporary happy reaction without canceling persistent goal!
+    triggerEmote("happy", 1100);
+  }, [wakeUp, triggerEmote]);
 
   const toggleSleep = useCallback(() => {
     if (modeRef.current === "resting") {
@@ -756,31 +758,19 @@ export function useAutonomousCapy({
       }
 
       // Satisfied reaction, then return to normal wandering
+      currentGoalRef.current = "wander";
       setPose("happy");
+      changeMode("happy");
       triggerEmote("happy", 900);
       playCompanionSound("pet");
-
-      transitionTimerRef.current = setTimeout(() => {
-        transitionTimerRef.current = null;
-        currentGoalRef.current = "wander";
-        changeMode("wander");
-        setPose("walk");
-        planNextWander();
-      }, 700);
     } else if (modeRef.current === "eating") {
       // Eating sequence completed (10 frames finished)
       setActiveLeaf(null);
+      currentGoalRef.current = "wander";
       setPose("happy");
+      changeMode("happy");
       triggerEmote("happy", 800);
       playCompanionSound("pet");
-
-      transitionTimerRef.current = setTimeout(() => {
-        transitionTimerRef.current = null;
-        currentGoalRef.current = "wander";
-        changeMode("wander");
-        setPose("walk");
-        planNextWander();
-      }, 600);
     } else if (modeRef.current === "planting") {
       // 8-frame planting animation completed
       // The sprout has appeared! Now spawn the tree snack and start its growth
@@ -804,6 +794,7 @@ export function useAutonomousCapy({
       setActiveLeaf(leaf);
       playCompanionSound("pop");
       setPose("happy");
+      changeMode("happy");
       triggerEmote("happy", 800);
       playCompanionSound("pet");
 
@@ -820,6 +811,7 @@ export function useAutonomousCapy({
                 stage: "ready",
                 treeStage: 10,
               };
+              currentGoalRef.current = "eat_snack";
               startApproachingReadyLeaf(readyLeaf);
               return readyLeaf;
             }
@@ -835,68 +827,35 @@ export function useAutonomousCapy({
                 }
               : curr
           );
-          if (step === 4 || step === 8) {
-            playCompanionSound("pop");
-          }
         }
       }, 140);
 
       transitionTimerRef.current = setTimeout(() => {
         transitionTimerRef.current = null;
-        currentGoalRef.current = "wander";
-        changeMode("wander");
-        setPose("walk");
-        planNextWander();
+        resumeGoalRef.current();
       }, 700);
-    } else if (modeRef.current === "waking") {
-      // Stretch sequence completed (10 frames finished)
-      // Resume interrupted goal or wander
-      if (interruptedGoalRef.current === "press_focus") {
-        interruptedGoalRef.current = null;
-        startPressFocus();
-      } else if (interruptedGoalRef.current === "plant") {
-        interruptedGoalRef.current = null;
-        spawnLeaf();
-      } else if (
-        interruptedGoalRef.current === "eat_snack" &&
-        activeLeafRef.current?.stage === "ready"
-      ) {
-        interruptedGoalRef.current = null;
-        startApproachingReadyLeaf(activeLeafRef.current);
-      } else {
-        interruptedGoalRef.current = null;
-        currentGoalRef.current = "wander";
-        changeMode("wander");
-        setPose("walk");
-        planNextWander();
+    } else if (
+      modeRef.current === "waking" ||
+      modeRef.current === "thinking" ||
+      modeRef.current === "reading" ||
+      modeRef.current === "curious" ||
+      modeRef.current === "happy" ||
+      pose === "curious"
+    ) {
+      if (emoteTimerRef.current) {
+        clearTimeout(emoteTimerRef.current);
+        emoteTimerRef.current = null;
       }
-    } else if (modeRef.current === "thinking" || modeRef.current === "reading") {
-      // Thinking or reading animation completed (10 frames finished), resume wandering
-      currentGoalRef.current = "wander";
-      changeMode("wander");
-      setPose("walk");
-      planNextWander();
-    } else if (pose === "curious") {
-      // Star emoji animation completed (8 frames finished), resume wandering
-      currentGoalRef.current = "wander";
-      changeMode("wander");
-      setPose("walk");
-      planNextWander();
+      setActiveEmote(null);
+      resumeGoalRef.current();
     } else if (modeRef.current === "shouting") {
       // Shouting sequence finished (sound ended and frames 7-8 played)
       setPose("happy");
+      changeMode("happy");
       triggerEmote("happy", 900);
       playCompanionSound("pet");
-
-      transitionTimerRef.current = setTimeout(() => {
-        transitionTimerRef.current = null;
-        currentGoalRef.current = "wander";
-        changeMode("wander");
-        setPose("walk");
-        planNextWander();
-      }, 700);
     }
-  }, [triggerEmote, startPressFocus, startApproachingReadyLeaf, planNextWander, changeMode, facing, spawnLeaf, pose]);
+  }, [triggerEmote, startApproachingReadyLeaf, changeMode, facing, pose]);
 
   // Goal: When a tree suddenly pops up on screen and is ready, Capy will ALWAYS go and eat it!
   useEffect(() => {
@@ -1401,18 +1360,7 @@ export function useAutonomousCapy({
         setTimeout(() => setLandingBounce(false), 450);
 
         transitionTimerRef.current = setTimeout(() => {
-          setPose("walk");
-          changeMode("wander");
-          const vp = viewportRef.current;
-          if (posRef.current.x > vp.width * 0.55) {
-            setFacing("left");
-            planNextWander("left");
-          } else if (posRef.current.x < vp.width * 0.42) {
-            setFacing("right");
-            planNextWander("right");
-          } else {
-            planNextWander();
-          }
+          resumeGoalRef.current();
         }, 350);
       } else {
         if (modeRef.current === "resting") {
@@ -1422,7 +1370,7 @@ export function useAutonomousCapy({
         }
       }
     },
-    [triggerPet, wakeUp, planNextWander, changeMode]
+    [triggerPet, wakeUp]
   );
 
   return {

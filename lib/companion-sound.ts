@@ -57,18 +57,18 @@ export function playCompanionSound(type: "pet" | "snack" | "pop" | "drop") {
         osc.stop(t + delay + 0.07);
       });
     } else if (type === "pop") {
-      // Sprout popping out of earth
+      // Gentle, soft bubble pop for cozy sprout emergence
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "sine";
-      osc.frequency.setValueAtTime(260, t);
-      osc.frequency.exponentialRampToValueAtTime(520, t + 0.08);
-      gain.gain.setValueAtTime(0.03, t);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      osc.frequency.setValueAtTime(320, t);
+      osc.frequency.exponentialRampToValueAtTime(440, t + 0.05);
+      gain.gain.setValueAtTime(0.018, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(t);
-      osc.stop(t + 0.12);
+      osc.stop(t + 0.09);
     } else if (type === "drop") {
       // Soft gentle landing thud
       const osc = ctx.createOscillator();
