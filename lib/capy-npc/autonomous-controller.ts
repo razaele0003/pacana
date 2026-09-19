@@ -205,14 +205,26 @@ export function useAutonomousCapy({
         transitionTimerRef.current = null;
       }
 
+      if (emoteTimerRef.current) {
+        clearTimeout(emoteTimerRef.current);
+        emoteTimerRef.current = null;
+      }
+
       // Clear waypoints so Capy is completely stationary in world space
       waypointsRef.current = [];
 
       if (type === "curious") {
-        setPose("curious");
-        changeMode("curious");
+        if (pose === "curious") {
+          setPose("idle");
+          setTimeout(() => {
+            setPose("curious");
+            changeMode("curious");
+          }, 16);
+        } else {
+          setPose("curious");
+          changeMode("curious");
+        }
         setActiveEmote(null);
-        playCompanionSound("pop");
       } else if (type === "reading" || type === "read") {
         setPose("read");
         changeMode("reading");
