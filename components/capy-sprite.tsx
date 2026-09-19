@@ -97,8 +97,9 @@ const ANIMATION_SEQUENCES: Partial<Record<CapyPose, AnimationConfig>> = {
     loop: false,
   },
   plant: {
-    frames: Array.from({ length: 10 }, (_, i) => `/art/cappy/eat-${i + 1}.png`),
-    intervalMs: 110,
+    // 8 frames from planting sprite sheet
+    frames: Array.from({ length: 8 }, (_, i) => `/art/cappy/plant-${i + 1}.png`),
+    intervalMs: 130,
     loop: false,
   },
 };
@@ -120,6 +121,7 @@ const ALL_PRELOAD_IMAGES: string[] = [
   ...Array.from({ length: 10 }, (_, i) => `/art/cappy/stretch-${i + 1}.png`),
   ...Array.from({ length: 10 }, (_, i) => `/art/cappy/read-${i + 1}.png`),
   ...Array.from({ length: 10 }, (_, i) => `/art/cappy/sleep-${i + 1}.png`),
+  ...Array.from({ length: 8 }, (_, i) => `/art/cappy/plant-${i + 1}.png`),
   "/art/cappy/rest.png",
   "/art/capy-drag.png",
   "/art/capy-sprout.png",

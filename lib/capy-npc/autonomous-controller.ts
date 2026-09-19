@@ -24,6 +24,7 @@ export type CompanionMode =
   | "resting"
   | "waking"
   | "dragged"
+  | "planting"
   | "idle";
 
 export type CapyGoalType =
@@ -31,6 +32,7 @@ export type CapyGoalType =
   | "press_focus"
   | "eat_snack"
   | "go_home"
+  | "plant"
   | "rest";
 
 export type EmoteType =
@@ -171,6 +173,7 @@ export function useAutonomousCapy({
         modeRef.current === "walk_to_focus" ||
         modeRef.current === "focusing" ||
         modeRef.current === "eating" ||
+        modeRef.current === "planting" ||
         modeRef.current === "resting"
       ) {
         return;
@@ -443,67 +446,33 @@ export function useAutonomousCapy({
     [refreshObstacles, triggerEmote, planNextWander, changeMode]
   );
 
-  // Spawn growing plant sequence
+  // Spawn growing plant sequence with dedicated 8-frame planting animation
   const spawnLeaf = useCallback(
     (customPoint?: Point) => {
-      refreshObstacles();
-      const vp = viewportRef.current;
-      const obstacles = obstaclesRef.current;
+      if (
+        isDraggingRef.current ||
+        modeRef.current === "eating" ||
+        modeRef.current === "planting"
+      ) {
+        return;
+      }
 
-      const leafPos =
-        customPoint && isPointInBounds(customPoint, vp, 40, 40)
-          ? customPoint
-          : getRandomReachableSafePoint(posRef.current, obstacles, vp, 60, 50);
+      if (modeRef.current === "resting") {
+        interruptedGoalRef.current = "plant";
+        changeMode("waking");
+        setPose("stretch");
+        playCompanionSound("pet");
+        return;
+      }
 
-      const leaf: SpawnedLeaf = {
-        id: `leaf-${Date.now()}`,
-        x: leafPos.x,
-        y: leafPos.y,
-        createdAt: Date.now(),
-        stage: "sprouting",
-        treeStage: 1,
-        isBeingEaten: false,
-      };
-
-      setActiveLeaf(leaf);
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+      waypointsRef.current = [];
+      currentGoalRef.current = "plant";
+      changeMode("planting");
+      setPose("plant");
       playCompanionSound("pop");
-      triggerEmote("snack", 900);
-
-      // Smoothly advance through tree growth stages 1..10
-      let step = 1;
-      const growthInterval = setInterval(() => {
-        step += 1;
-        if (step >= 10) {
-          clearInterval(growthInterval);
-          setActiveLeaf((curr) => {
-            if (curr && curr.id === leaf.id) {
-              const readyLeaf: SpawnedLeaf = {
-                ...curr,
-                stage: "ready",
-                treeStage: 10,
-              };
-              startApproachingReadyLeaf(readyLeaf);
-              return readyLeaf;
-            }
-            return curr;
-          });
-        } else {
-          setActiveLeaf((curr) =>
-            curr && curr.id === leaf.id
-              ? {
-                  ...curr,
-                  stage: step >= 6 ? "growing" : "sprouting",
-                  treeStage: step,
-                }
-              : curr
-          );
-          if (step === 4 || step === 8) {
-            playCompanionSound("pop");
-          }
-        }
-      }, 120);
     },
-    [refreshObstacles, startApproachingReadyLeaf, triggerEmote]
+    [changeMode]
   );
 
   // Petting interaction (temporary reaction that DOES NOT cancel current goal!)
@@ -534,6 +503,9 @@ export function useAutonomousCapy({
       if (interruptedGoalRef.current === "press_focus") {
         interruptedGoalRef.current = null;
         startPressFocus();
+      } else if (interruptedGoalRef.current === "plant") {
+        interruptedGoalRef.current = null;
+        spawnLeaf();
       } else if (
         interruptedGoalRef.current === "eat_snack" &&
         activeLeafRef.current?.stage === "ready"
@@ -551,7 +523,7 @@ export function useAutonomousCapy({
         planNextWander();
       }
     }, 1100);
-  }, [triggerEmote, startPressFocus, startApproachingReadyLeaf, planNextWander, changeMode]);
+  }, [triggerEmote, startPressFocus, startApproachingReadyLeaf, planNextWander, changeMode, spawnLeaf]);
 
   // Rest & Waking System
   const wakeUp = useCallback(() => {
@@ -633,12 +605,81 @@ export function useAutonomousCapy({
         setPose("walk");
         planNextWander();
       }, 600);
+    } else if (modeRef.current === "planting") {
+      // 8-frame planting animation completed
+      // The sprout has appeared! Now spawn the tree snack and start its growth
+      const vp = viewportRef.current;
+      const cur = posRef.current;
+      // In the sprite, dirt mound and sprout are on the right side of Cappy
+      const offsetX = facing === "right" ? 54 : -54;
+      const plantX = Math.max(40, Math.min(vp.width - 40, cur.x + offsetX));
+      const plantY = Math.max(48, Math.min(vp.height - 48, cur.y + 12));
+
+      const leaf: SpawnedLeaf = {
+        id: `leaf-${Date.now()}`,
+        x: plantX,
+        y: plantY,
+        createdAt: Date.now(),
+        stage: "sprouting",
+        treeStage: 1,
+        isBeingEaten: false,
+      };
+
+      setActiveLeaf(leaf);
+      playCompanionSound("pop");
+      setPose("happy");
+      triggerEmote("happy", 800);
+      playCompanionSound("pet");
+
+      // Smoothly advance through tree growth stages 1..10
+      let step = 1;
+      const growthInterval = setInterval(() => {
+        step += 1;
+        if (step >= 10) {
+          clearInterval(growthInterval);
+          setActiveLeaf((curr) => {
+            if (curr && curr.id === leaf.id) {
+              const readyLeaf: SpawnedLeaf = {
+                ...curr,
+                stage: "ready",
+                treeStage: 10,
+              };
+              startApproachingReadyLeaf(readyLeaf);
+              return readyLeaf;
+            }
+            return curr;
+          });
+        } else {
+          setActiveLeaf((curr) =>
+            curr && curr.id === leaf.id
+              ? {
+                  ...curr,
+                  stage: step >= 6 ? "growing" : "sprouting",
+                  treeStage: step,
+                }
+              : curr
+          );
+          if (step === 4 || step === 8) {
+            playCompanionSound("pop");
+          }
+        }
+      }, 140);
+
+      transitionTimerRef.current = setTimeout(() => {
+        currentGoalRef.current = "wander";
+        changeMode("wander");
+        setPose("walk");
+        planNextWander();
+      }, 700);
     } else if (modeRef.current === "waking") {
       // Stretch sequence completed (10 frames finished)
       // Resume interrupted goal or wander
       if (interruptedGoalRef.current === "press_focus") {
         interruptedGoalRef.current = null;
         startPressFocus();
+      } else if (interruptedGoalRef.current === "plant") {
+        interruptedGoalRef.current = null;
+        spawnLeaf();
       } else if (
         interruptedGoalRef.current === "eat_snack" &&
         activeLeafRef.current?.stage === "ready"
@@ -653,7 +694,7 @@ export function useAutonomousCapy({
         planNextWander();
       }
     }
-  }, [triggerEmote, startPressFocus, startApproachingReadyLeaf, planNextWander, changeMode]);
+  }, [triggerEmote, startPressFocus, startApproachingReadyLeaf, planNextWander, changeMode, facing, spawnLeaf]);
 
   // Viewport & Obstacle resize adapt
   useEffect(() => {
