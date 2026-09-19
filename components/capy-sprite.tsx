@@ -133,6 +133,7 @@ export default function CapySprite({
   facing = "right",
   showSprout = false,
   showHearts = false,
+  showZzz = false,
   size = 76,
   className = "",
   isFloating = false,
@@ -244,6 +245,15 @@ export default function CapySprite({
           <span className="heart h1">♥</span>
           <span className="heart h2">♥</span>
           <span className="heart h3">♥</span>
+        </div>
+      )}
+
+      {/* Floating Zzz when sleeping */}
+      {(showZzz || isRestingPose) && (
+        <div className="capy-effects-layer zzz" aria-hidden="true">
+          <span className="z-item z1">z</span>
+          <span className="z-item z2">z</span>
+          <span className="z-item z3">Z</span>
         </div>
       )}
 

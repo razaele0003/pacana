@@ -837,6 +837,7 @@ export default function InteractiveCompanion({
           pose={npc.pose}
           facing={npc.facing}
           showHearts={npc.showHearts}
+          showZzz={npc.showZzz}
           size={76}
           isFloating={true}
           onFrame={npc.onFrame}

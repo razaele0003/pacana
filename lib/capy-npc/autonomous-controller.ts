@@ -12,6 +12,10 @@ import {
   isPointInBounds,
   CLEARANCE_X,
   CLEARANCE_Y,
+  WALL_MARGIN_X,
+  WALL_MARGIN_Y,
+  CAPPY_WIDTH,
+  CAPPY_HEIGHT,
 } from "./obstacle-manager";
 
 export type CompanionMode =
@@ -396,26 +400,31 @@ export function useAutonomousCapy({
       onFocusCompleteRef.current = onComplete || null;
       const rect = btn.getBoundingClientRect();
 
-      // Position Cappy right below the button so his raised paw reaches the bottom edge of the button
+      // Position Cappy so his raised paw reaches the center of the target button
+      // In focus-5.png, paw is at 13.4px from top of sprite, and 65px from left (when facing right)
       const targetX = Math.max(
-        CLEARANCE_X,
-        Math.min(vp.width - CLEARANCE_X, rect.left + Math.min(rect.width * 0.35, 40))
+        WALL_MARGIN_X,
+        Math.min(vp.width - CAPPY_WIDTH - WALL_MARGIN_X, rect.left + Math.min(rect.width * 0.35, 36))
       );
       const targetY = Math.max(
-        CLEARANCE_Y,
-        Math.min(vp.height - CLEARANCE_Y, rect.bottom + 16)
+        48,
+        Math.min(vp.height - CAPPY_HEIGHT - WALL_MARGIN_Y, rect.top + rect.height * 0.5 - 14)
       );
       const targetPoint: Point = { x: targetX, y: targetY };
       targetPosRef.current = targetPoint;
 
-      // Filter out obstacles enclosing the button so Cappy can pathfind all the way to it
+      // Filter out obstacles enclosing the button or targetPoint so Cappy can pathfind all the way to it
       const filteredObstacles = obstacles.filter(
         (obs) =>
           !(
-            rect.left < obs.right &&
-            rect.right > obs.left &&
-            rect.top < obs.bottom &&
-            rect.bottom > obs.top
+            (rect.left < obs.right &&
+              rect.right > obs.left &&
+              rect.top < obs.bottom &&
+              rect.bottom > obs.top) ||
+            (targetPoint.x >= obs.left - CLEARANCE_X &&
+              targetPoint.x <= obs.right + CLEARANCE_X &&
+              targetPoint.y >= obs.top - CLEARANCE_Y &&
+              targetPoint.y <= obs.bottom + CLEARANCE_Y)
           )
       );
 
@@ -554,6 +563,9 @@ export function useAutonomousCapy({
       if (frameIdx === 5) {
         if (targetButtonElRef.current) {
           targetButtonElRef.current.click();
+          targetButtonElRef.current.dispatchEvent(
+            new MouseEvent("click", { bubbles: true, cancelable: true })
+          );
           playCompanionSound("pop");
         }
       }
@@ -572,6 +584,14 @@ export function useAutonomousCapy({
   // Animation complete callback from CapySprite
   const onAnimationComplete = useCallback(() => {
     if (modeRef.current === "focusing") {
+      // Ensure button click is executed
+      if (targetButtonElRef.current) {
+        targetButtonElRef.current.click();
+        targetButtonElRef.current.dispatchEvent(
+          new MouseEvent("click", { bubbles: true, cancelable: true })
+        );
+      }
+
       // Focus sequence completed (10 frames finished)
       // If a completion callback was provided (e.g. from Call Home sequence), run it!
       if (onFocusCompleteRef.current) {
@@ -1068,7 +1088,7 @@ export function useAutonomousCapy({
     activeEmote,
     triggerEmote,
     showHearts,
-    showZzz: false, // Explicitly no floating Zzz per specification
+    showZzz: mode === "resting" || pose === "sleep",
     landingBounce,
     spawnLeaf,
     startApproachingReadyLeaf,
