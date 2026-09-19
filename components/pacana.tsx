@@ -246,6 +246,76 @@ export default function Pacana() {
       window.removeEventListener("offline", connection);
     };
   }, []);
+  useEffect(() => {
+    if (
+      typeof window !== "undefined" &&
+      (window.location.protocol === "pacana:" ||
+        navigator.userAgent.includes("Electron"))
+    ) {
+      document.body.classList.add("is-desktop");
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInput =
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.getAttribute("contenteditable") === "true");
+
+      // Ctrl+, -> Settings
+      if ((e.ctrlKey || e.metaKey) && e.key === ",") {
+        e.preventDefault();
+        choose("Settings");
+      }
+      // Ctrl+1..4 -> Switch tabs
+      else if (
+        (e.ctrlKey || e.metaKey) &&
+        ["1", "2", "3", "4"].includes(e.key)
+      ) {
+        e.preventDefault();
+        const tabNames = ["Focus", "Check-ins", "Journal", "Progress"];
+        const target = tabNames[parseInt(e.key, 10) - 1];
+        if (target) choose(target);
+      }
+      // Space -> Start / pause / resume focus timer
+      else if (
+        e.code === "Space" &&
+        !isInput &&
+        !editing &&
+        !manualJournal &&
+        !setup
+      ) {
+        e.preventDefault();
+        void update((s) => {
+          if (!s.timer || s.timer.status === "complete") {
+            startPhase(s, Date.now(), "focus", task, category);
+          } else if (s.timer.status === "running") {
+            pause(s, Date.now());
+          } else if (s.timer.status === "paused") {
+            resume(s, Date.now());
+          }
+        });
+      }
+      // F key -> Toggle scoreboard fullscreen
+      else if (
+        (e.key === "f" || e.key === "F") &&
+        !isInput &&
+        !editing &&
+        !manualJournal &&
+        !setup &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey
+      ) {
+        e.preventDefault();
+        setFullscreen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [editing, manualJournal, setup, task, category]);
   if (!state)
     return (
       <main className="loading">
@@ -290,7 +360,19 @@ export default function Pacana() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="/">
+        <a
+          className="brand"
+          href="/"
+          onClick={(e) => {
+            if (
+              typeof window !== "undefined" &&
+              window.location.protocol === "pacana:"
+            ) {
+              e.preventDefault();
+              choose("Focus");
+            }
+          }}
+        >
           <span className="brand-mark">
             <Leaf />
           </span>
@@ -340,7 +422,19 @@ export default function Pacana() {
             Your woodland retreat <ChevronRight size={14} />{" "}
             <strong>{tab}</strong>
           </span>
-          <a className="mobile-brand" href="/">
+          <a
+            className="mobile-brand"
+            href="/"
+            onClick={(e) => {
+              if (
+                typeof window !== "undefined" &&
+                window.location.protocol === "pacana:"
+              ) {
+                e.preventDefault();
+                choose("Focus");
+              }
+            }}
+          >
             pacana <Leaf size={20} />
           </a>
           <div className="top-actions">

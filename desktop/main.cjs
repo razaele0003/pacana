@@ -98,49 +98,62 @@ else {
           origin === "pacana://app" &&
           permission === "notifications",
       );
-      Menu.setApplicationMenu(
-        Menu.buildFromTemplate([
-          {
-            label: "Pacana",
-            submenu: [
-              { label: "Fullscreen", role: "togglefullscreen" },
-              { type: "separator" },
-              { role: "quit" },
-            ],
-          },
-          {
-            label: "Edit",
-            submenu: [
-              { role: "undo" },
-              { role: "redo" },
-              { type: "separator" },
-              { role: "cut" },
-              { role: "copy" },
-              { role: "paste" },
-              { role: "selectAll" },
-            ],
-          },
-          {
-            label: "View",
-            submenu: [
-              { role: "reload" },
-              { role: "resetZoom" },
-              { role: "zoomIn" },
-              { role: "zoomOut" },
-            ],
-          },
-        ]),
+      Menu.setApplicationMenu(null);
+
+      const windowStateFile = path.join(
+        app.getPath("userData"),
+        "window-state.json",
       );
+
+      async function getSavedWindowState() {
+        try {
+          const raw = await fs.readFile(windowStateFile, "utf8");
+          return JSON.parse(raw);
+        } catch {
+          return { isMaximized: true, width: 1280, height: 900 };
+        }
+      }
+
+      async function persistWindowState(win) {
+        if (!win || win.isDestroyed()) return;
+        try {
+          const isMax = win.isMaximized();
+          const isFull = win.isFullScreen();
+          const bounds =
+            typeof win.getNormalBounds === "function" && (isMax || isFull)
+              ? win.getNormalBounds()
+              : win.getBounds();
+          const data = {
+            isMaximized: isMax || isFull,
+            x: bounds.x,
+            y: bounds.y,
+            width: bounds.width,
+            height: bounds.height,
+          };
+          await fs.writeFile(windowStateFile, JSON.stringify(data, null, 2));
+        } catch {}
+      }
+
+      const savedState = await getSavedWindowState();
       const iconPath = path.join(__dirname, "icon.png");
       window = new BrowserWindow({
         title: "Pacana",
         icon: iconPath,
-        width: 1280,
-        height: 900,
-        minWidth: 390,
-        minHeight: 600,
-        backgroundColor: "#f7f5ed",
+        width: savedState.width || 1280,
+        height: savedState.height || 900,
+        x: savedState.x,
+        y: savedState.y,
+        minWidth: 700,
+        minHeight: 500,
+        backgroundColor: "#f8f6ef",
         show: false,
+        autoHideMenuBar: true,
+        titleBarStyle: "hidden",
+        titleBarOverlay: {
+          color: "#f8f6ef",
+          symbolColor: "#40372f",
+          height: 40,
+        },
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
@@ -154,12 +167,107 @@ else {
         if (!url.startsWith("pacana://app/")) event.preventDefault();
       });
       window.on("close", (event) => {
+        if (!smoke) void persistWindowState(window);
         if (!isQuitting && !smoke && minimizeToTray) {
           event.preventDefault();
           window.hide();
         }
       });
-      window.once("ready-to-show", () => window.show());
+      window.once("ready-to-show", () => {
+        if (!smoke && savedState.isMaximized !== false) {
+          window.maximize();
+        }
+        window.show();
+      });
+
+      const saveDebounced = () => {
+        if (!smoke) void persistWindowState(window);
+      };
+      window.on("resize", saveDebounced);
+      window.on("move", saveDebounced);
+
+      // Native desktop context menu for inputs and selected text
+      window.webContents.on("context-menu", (event, params) => {
+        const { isEditable, selectionText } = params;
+        if (isEditable) {
+          const editMenu = Menu.buildFromTemplate([
+            { role: "undo", label: "Undo" },
+            { role: "redo", label: "Redo" },
+            { type: "separator" },
+            { role: "cut", label: "Cut" },
+            { role: "copy", label: "Copy" },
+            { role: "paste", label: "Paste" },
+            { type: "separator" },
+            { role: "selectAll", label: "Select All" },
+          ]);
+          editMenu.popup({ window });
+        } else if (selectionText && selectionText.trim().length > 0) {
+          const selectMenu = Menu.buildFromTemplate([
+            { role: "copy", label: "Copy" },
+            { role: "selectAll", label: "Select All" },
+          ]);
+          selectMenu.popup({ window });
+        }
+      });
+
+      // Desktop keyboard shortcuts & fullscreen support
+      window.webContents.on("before-input-event", (event, input) => {
+        if (input.type === "keyDown") {
+          if (input.key === "F11") {
+            window.setFullScreen(!window.isFullScreen());
+            event.preventDefault();
+          } else if (input.key === "Escape" && window.isFullScreen()) {
+            window.setFullScreen(false);
+            event.preventDefault();
+          } else if (
+            (input.control || input.meta) &&
+            (input.key === "w" || input.key === "W")
+          ) {
+            event.preventDefault();
+            if (minimizeToTray) window.hide();
+            else window.close();
+          } else if (
+            (input.control || input.meta) &&
+            ["=", "+", "-", "_", "0"].includes(input.key)
+          ) {
+            event.preventDefault();
+          } else if (
+            !smoke &&
+            (input.key === "F5" ||
+              ((input.control || input.meta) &&
+                (input.key === "r" || input.key === "R")))
+          ) {
+            event.preventDefault();
+          }
+        }
+      });
+
+      // Disable browser zooming
+      window.webContents.setVisualZoomLevelLimits(1, 1);
+      window.webContents.on("zoom-changed", () => {
+        window.webContents.setZoomLevel(0);
+      });
+
+      const applyDesktopClasses = () => {
+        if (!window || window.isDestroyed()) return;
+        const isFull = window.isFullScreen();
+        window.webContents
+          .executeJavaScript(
+            `
+          document.body.classList.add('is-desktop');
+          if (${isFull}) {
+            document.body.classList.add('is-fullscreen');
+          } else {
+            document.body.classList.remove('is-fullscreen');
+          }
+        `,
+          )
+          .catch(() => {});
+      };
+      window.webContents.on("dom-ready", applyDesktopClasses);
+      window.on("enter-full-screen", applyDesktopClasses);
+      window.on("leave-full-screen", applyDesktopClasses);
+
       await window.loadURL("pacana://app/app");
 
       if (!smoke) {
@@ -179,6 +287,15 @@ else {
                     if (window.isMinimized()) window.restore();
                     window.show();
                     window.focus();
+                  }
+                },
+              },
+              {
+                label: "Toggle Fullscreen (F11)",
+                click: () => {
+                  if (window) {
+                    if (!window.isVisible()) window.show();
+                    window.setFullScreen(!window.isFullScreen());
                   }
                 },
               },

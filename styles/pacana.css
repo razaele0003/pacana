@@ -2512,3 +2512,90 @@ progress::-webkit-progress-value {
     display: none;
   }
 }
+
+/* ==========================================================================
+   Desktop Application Native Experience
+   ========================================================================== */
+
+/* Prevent browser text selection on UI chrome */
+body.is-desktop,
+body.is-desktop .sidebar,
+body.is-desktop .topbar,
+body.is-desktop button,
+body.is-desktop .badge,
+body.is-desktop .level-chip,
+body.is-desktop .eyebrow,
+body.is-desktop .nav-item,
+body.is-desktop .card,
+body.is-desktop .timer-card,
+body.is-desktop .scoreboard-card,
+body.is-desktop .scoreboard-panel,
+body.is-desktop .scoreboard-ring,
+body.is-desktop .scoreboard-num,
+body.is-desktop .grow-card,
+body.is-desktop .local-status,
+body.is-desktop .date-pill,
+body.is-desktop .session-label {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Allow text selection in editable text and journal notes */
+body.is-desktop input,
+body.is-desktop textarea,
+body.is-desktop [contenteditable="true"],
+body.is-desktop .journal-entry,
+body.is-desktop .journal-card,
+body.is-desktop p,
+body.is-desktop span {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Re-apply no-select to buttons and badges even if inside text */
+body.is-desktop button,
+body.is-desktop .badge,
+body.is-desktop .level-chip,
+body.is-desktop .nav-item {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Prevent browser ghost image dragging */
+body.is-desktop img,
+body.is-desktop svg,
+body.is-desktop a {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+/* Seamless Titlebar & Draggable Regions */
+body.is-desktop .topbar {
+  -webkit-app-region: drag;
+  padding-right: 155px; /* Leaves room for Windows native minimize/maximize/close overlay */
+}
+
+body.is-desktop .sidebar {
+  -webkit-app-region: drag;
+}
+
+/* Ensure interactive controls inside draggable areas remain clickable */
+body.is-desktop .topbar button,
+body.is-desktop .topbar a,
+body.is-desktop .topbar input,
+body.is-desktop .topbar select,
+body.is-desktop .topbar .level-chip,
+body.is-desktop .topbar .clock,
+body.is-desktop .sidebar button,
+body.is-desktop .sidebar a,
+body.is-desktop .sidebar input,
+body.is-desktop .sidebar select,
+body.is-desktop .sidebar .grow-card {
+  -webkit-app-region: no-drag;
+}
+
+/* Fullscreen mode: no window control overlay, restore standard padding */
+body.is-desktop.is-fullscreen .topbar {
+  padding-right: 38px;
+}
+
