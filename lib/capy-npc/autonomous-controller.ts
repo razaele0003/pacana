@@ -31,6 +31,7 @@ export type CompanionMode =
   | "planting"
   | "thinking"
   | "reading"
+  | "shouting"
   | "idle";
 
 export type CapyGoalType =
@@ -39,6 +40,7 @@ export type CapyGoalType =
   | "eat_snack"
   | "go_home"
   | "plant"
+  | "alarm"
   | "rest";
 
 export type EmoteType =
@@ -580,6 +582,25 @@ export function useAutonomousCapy({
     [spawnWildTree]
   );
 
+  // Start shouting animation when timer completes (focus, short break, long break)
+  const startShouting = useCallback(() => {
+    if (isDraggingRef.current) return;
+
+    if (transitionTimerRef.current) {
+      clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
+    if (emoteTimerRef.current) {
+      clearTimeout(emoteTimerRef.current);
+      emoteTimerRef.current = null;
+    }
+
+    waypointsRef.current = [];
+    currentGoalRef.current = "alarm";
+    changeMode("shouting");
+    setPose("shout");
+  }, [changeMode]);
+
   // Petting interaction (temporary reaction that DOES NOT cancel current goal!)
   const triggerPet = useCallback(() => {
     if (modeRef.current === "resting") {
@@ -819,6 +840,19 @@ export function useAutonomousCapy({
       changeMode("wander");
       setPose("walk");
       planNextWander();
+    } else if (modeRef.current === "shouting") {
+      // Shouting sequence finished (sound ended and frames 7-8 played)
+      setPose("happy");
+      triggerEmote("happy", 900);
+      playCompanionSound("pet");
+
+      transitionTimerRef.current = setTimeout(() => {
+        transitionTimerRef.current = null;
+        currentGoalRef.current = "wander";
+        changeMode("wander");
+        setPose("walk");
+        planNextWander();
+      }, 700);
     }
   }, [triggerEmote, startPressFocus, startApproachingReadyLeaf, planNextWander, changeMode, facing, spawnLeaf]);
 
@@ -829,12 +863,24 @@ export function useAutonomousCapy({
         modeRef.current !== "walk_to_snack" &&
         modeRef.current !== "eating" &&
         modeRef.current !== "waking" &&
+        modeRef.current !== "shouting" &&
         !isDraggingRef.current
       ) {
         startApproachingReadyLeaf(activeLeaf);
       }
     }
   }, [activeLeaf, startApproachingReadyLeaf]);
+
+  // Trigger shouting animation when timer completes (focus, short break, long break)
+  useEffect(() => {
+    const handleTimerComplete = () => {
+      startShouting();
+    };
+    window.addEventListener("pacana:timer-complete", handleTimerComplete);
+    return () => {
+      window.removeEventListener("pacana:timer-complete", handleTimerComplete);
+    };
+  }, [startShouting]);
 
   // Viewport & Obstacle resize adapt
   useEffect(() => {
@@ -1275,6 +1321,7 @@ export function useAutonomousCapy({
     spawnLeaf,
     startApproachingReadyLeaf,
     startPressFocus,
+    startShouting,
     triggerPet,
     toggleSleep,
     wakeUp,

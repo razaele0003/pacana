@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 export type CapyPose =
   | "idle"
@@ -17,7 +17,8 @@ export type CapyPose =
   | "plant"
   | "drag"
   | "pet"
-  | "bite";
+  | "bite"
+  | "shout";
 
 interface CapySpriteProps {
   pose: CapyPose;
@@ -102,6 +103,12 @@ const ANIMATION_SEQUENCES: Partial<Record<CapyPose, AnimationConfig>> = {
     intervalMs: 130,
     loop: false,
   },
+  shout: {
+    // 8 frames: walks to mic, opens mouth, shouts into mic with sound sparks, catches breath, stands proud
+    frames: Array.from({ length: 8 }, (_, i) => `/art/cappy/shout-${i + 1}.png`),
+    intervalMs: 120,
+    loop: false,
+  },
 };
 
 const STATIC_POSE_IMAGES: Partial<Record<CapyPose, string>> = {
@@ -122,6 +129,7 @@ const ALL_PRELOAD_IMAGES: string[] = [
   ...Array.from({ length: 10 }, (_, i) => `/art/cappy/read-${i + 1}.png`),
   ...Array.from({ length: 10 }, (_, i) => `/art/cappy/sleep-${i + 1}.png`),
   ...Array.from({ length: 8 }, (_, i) => `/art/cappy/plant-${i + 1}.png`),
+  ...Array.from({ length: 8 }, (_, i) => `/art/cappy/shout-${i + 1}.png`),
   "/art/cappy/rest.png",
   "/art/capy-drag.png",
   "/art/capy-sprout.png",
@@ -174,6 +182,50 @@ export default function CapySprite({
     };
   }, [pose]);
 
+  const isSoundPlayingRef = useRef(false);
+
+  // When pose is "shout", track whether sound is playing to hold on frame 6 (index 5)
+  useEffect(() => {
+    if (pose !== "shout") return;
+
+    isSoundPlayingRef.current = true;
+
+    // Safety fallback: if sound is muted or blocked, hold for 2.8s then release
+    let fallbackTimer = setTimeout(() => {
+      isSoundPlayingRef.current = false;
+    }, 2800);
+
+    const handleSoundStarted = (e: Event) => {
+      isSoundPlayingRef.current = true;
+      clearTimeout(fallbackTimer);
+      const ce = e as CustomEvent<{ durationMs?: number }>;
+      const dur = ce.detail?.durationMs;
+      if (dur && dur > 0) {
+        fallbackTimer = setTimeout(() => {
+          isSoundPlayingRef.current = false;
+        }, dur + 250);
+      } else {
+        fallbackTimer = setTimeout(() => {
+          isSoundPlayingRef.current = false;
+        }, 15000);
+      }
+    };
+
+    const handleSoundEnded = () => {
+      clearTimeout(fallbackTimer);
+      isSoundPlayingRef.current = false;
+    };
+
+    window.addEventListener("pacana:sound-started", handleSoundStarted);
+    window.addEventListener("pacana:sound-ended", handleSoundEnded);
+
+    return () => {
+      clearTimeout(fallbackTimer);
+      window.removeEventListener("pacana:sound-started", handleSoundStarted);
+      window.removeEventListener("pacana:sound-ended", handleSoundEnded);
+    };
+  }, [pose]);
+
   // Frame sequence playback loop
   useEffect(() => {
     const config = ANIMATION_SEQUENCES[pose];
@@ -189,6 +241,12 @@ export default function CapySprite({
 
     const interval = setInterval(() => {
       setFrameIdx((current) => {
+        // If shouting, hold on frame 6 (index 5: shout-6.png) for however long the sound is!
+        if (pose === "shout" && current === 5 && isSoundPlayingRef.current) {
+          if (onFrame) onFrame(5);
+          return 5;
+        }
+
         const next = current + 1;
         if (next >= config.frames.length) {
           if (config.loop) {

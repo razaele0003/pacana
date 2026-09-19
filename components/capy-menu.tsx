@@ -25,6 +25,21 @@ export default function CapyMenu({
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
+      {/* 1. Leaf / Tree snack for Capy to eat */}
+      {onSpawnSnack && (
+        <button
+          type="button"
+          className="capy-menu-btn"
+          title="Sprout a tree snack for Cappy to eat"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSpawnSnack();
+          }}
+        >
+          <span className="menu-emoji">🌱</span>
+        </button>
+      )}
 
 
       {/* 3. Happy emote */}

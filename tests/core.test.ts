@@ -61,6 +61,7 @@ test("ringtone preferences preserve old journals and round-trip through backup",
     "bright-bell",
     "morning-call",
     "focus-alarm",
+    "ulah-oscar",
   ] as const) {
     const s = defaults();
     s.settings.ringtone = ringtone;

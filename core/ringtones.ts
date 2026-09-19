@@ -64,5 +64,10 @@ export const ringtones = [
     wave: "sawtooth",
     volume: 0.16,
   },
+  {
+    id: "ulah-oscar",
+    name: "Ulah Oscar · playful voice",
+    file: "/sounds/ulah-oscar.mp3",
+  },
 ] as const;
 export type Ringtone = (typeof ringtones)[number]["id"] | "custom";

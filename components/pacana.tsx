@@ -317,6 +317,13 @@ export default function Pacana() {
               ? "Your session is complete. Take a little breath."
               : `${result.checkpoints} check-in${result.checkpoints === 1 ? "" : "s"} ready to log.`;
             setNotice(text);
+            if (result.completed) {
+              window.dispatchEvent(
+                new CustomEvent("pacana:timer-complete", {
+                  detail: { phase: s.timer?.phase },
+                }),
+              );
+            }
             void alertUser(s.settings, "Pacana · A little check-in", text, {
               // A finished focus or break phase is always an alarm. Check-in
               // chimes still follow the optional reminder-sound preference.
@@ -1022,7 +1029,7 @@ export default function Pacana() {
                   <SidebarCompanion
                     pose={
                       timer?.status === "complete"
-                        ? "celebrate"
+                        ? "shout"
                         : phase !== "focus"
                           ? "rest"
                           : timer?.status === "running"
@@ -1263,7 +1270,7 @@ export default function Pacana() {
           initialPos={companionDropPos || undefined}
           externalPose={
             timer?.status === "complete"
-              ? "celebrate"
+              ? "shout"
               : phase !== "focus"
                 ? "rest"
                 : timer?.status === "running"

@@ -56,6 +56,7 @@ const schema = z.object({
         "bright-bell",
         "morning-call",
         "focus-alarm",
+        "ulah-oscar",
         "custom",
       ])
       .default("classic"),

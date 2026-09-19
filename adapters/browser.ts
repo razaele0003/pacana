@@ -28,6 +28,65 @@ async function loadCustom(source: string) {
     throw err;
   }
 }
+function notifySoundStarted(durationMs?: number) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("pacana:sound-started", { detail: { durationMs } }),
+    );
+  }
+}
+
+function notifySoundEnded() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("pacana:sound-ended"));
+  }
+}
+
+async function playAudioFile(url: string) {
+  // 1. Primary: Web Audio API BufferSource
+  try {
+    const source = audio!.createBufferSource();
+    const buffer = await loadCustom(url);
+    if (buffer) {
+      source.buffer = buffer;
+      source.connect(audio!.destination);
+      source.onended = () => {
+        source.disconnect();
+        playing = playing.filter((x) => x !== source);
+        notifySoundEnded();
+      };
+      playing.push(source);
+      notifySoundStarted(buffer.duration * 1000);
+      source.start();
+      return;
+    }
+  } catch (webAudioErr) {
+    console.warn(
+      "[Pacana Audio] Web Audio API failed, falling back to HTMLAudioElement:",
+      webAudioErr,
+    );
+  }
+
+  // 2. Secondary Fallback: Standard HTML5 Audio Element
+  try {
+    const audioEl = new Audio(url);
+    audioEl.onended = () => {
+      playing = playing.filter((x) => x !== audioEl);
+      notifySoundEnded();
+    };
+    playing.push(audioEl);
+    notifySoundStarted();
+    await audioEl.play();
+    return;
+  } catch (fallbackErr) {
+    console.error("[Pacana Audio] All playback methods failed:", fallbackErr);
+    notifySoundEnded();
+    throw new Error(
+      "Could not play audio. Please check device volume and audio format.",
+    );
+  }
+}
+
 async function playRingtone(settings: Settings) {
   audio ??= new AudioContext();
   if (audio.state !== "running") await audio.resume();
@@ -43,71 +102,50 @@ async function playRingtone(settings: Settings) {
     } catch {}
   }
   playing = [];
+
   if (settings.ringtone === "custom") {
     if (!settings.customRingtone)
       throw new Error("Upload a custom ringtone first.");
-
-    // 1. Primary: Web Audio API BufferSource
-    try {
-      const source = audio.createBufferSource();
-      const buffer = await loadCustom(settings.customRingtone);
-      if (buffer) {
-        source.buffer = buffer;
-        source.connect(audio.destination);
-        source.onended = () => {
-          source.disconnect();
-          playing = playing.filter((x) => x !== source);
-        };
-        playing.push(source);
-        source.start();
-        return;
-      }
-    } catch (webAudioErr) {
-      console.warn(
-        "[Pacana Audio] Web Audio API failed, falling back to HTMLAudioElement:",
-        webAudioErr,
-      );
-    }
-
-    // 2. Secondary Fallback: Standard HTML5 Audio Element
-    try {
-      const audioEl = new Audio(settings.customRingtone);
-      audioEl.onended = () => {
-        playing = playing.filter((x) => x !== audioEl);
-      };
-      playing.push(audioEl);
-      await audioEl.play();
-      return;
-    } catch (fallbackErr) {
-      console.error("[Pacana Audio] All playback methods failed:", fallbackErr);
-      throw new Error(
-        "Could not play audio. Please check device volume and audio format.",
-      );
-    }
+    return await playAudioFile(settings.customRingtone);
   }
+
   const chosen =
     ringtones.find((r) => r.id === settings.ringtone) ?? ringtones[0];
-  const context = audio;
-  chosen.notes.forEach((frequency, index) => {
-    const start = context.currentTime + index * chosen.step;
-    const gain = context.createGain();
-    gain.connect(context.destination);
-    gain.gain.setValueAtTime(0.001, start);
-    gain.gain.exponentialRampToValueAtTime(chosen.volume, start + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.001, start + chosen.length);
-    const tone = context.createOscillator();
-    tone.type = chosen.wave;
-    tone.frequency.setValueAtTime(frequency, start);
-    tone.connect(gain);
-    tone.onended = () => {
-      tone.disconnect();
-      gain.disconnect();
-      playing = playing.filter((x) => x !== tone);
-    };
-    playing.push(tone);
-    tone.start(start);
-    tone.stop(start + chosen.length);
-  });
+
+  if ("file" in chosen && chosen.file) {
+    return await playAudioFile(chosen.file);
+  }
+
+  if ("notes" in chosen && chosen.notes) {
+    const context = audio;
+    const totalDuration =
+      (chosen.notes.length - 1) * chosen.step + chosen.length;
+    notifySoundStarted(totalDuration * 1000);
+
+    chosen.notes.forEach((frequency, index) => {
+      const start = context.currentTime + index * chosen.step;
+      const gain = context.createGain();
+      gain.connect(context.destination);
+      gain.gain.setValueAtTime(0.001, start);
+      gain.gain.exponentialRampToValueAtTime(chosen.volume, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + chosen.length);
+      const tone = context.createOscillator();
+      tone.type = chosen.wave;
+      tone.frequency.setValueAtTime(frequency, start);
+      tone.connect(gain);
+      tone.onended = () => {
+        tone.disconnect();
+        gain.disconnect();
+        playing = playing.filter((x) => x !== tone);
+        if (playing.length === 0) {
+          notifySoundEnded();
+        }
+      };
+      playing.push(tone);
+      tone.start(start);
+      tone.stop(start + chosen.length);
+    });
+  }
 }
 export async function previewRingtone(settings: Settings) {
   await unlockAudio(settings.customRingtone);

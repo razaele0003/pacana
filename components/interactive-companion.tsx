@@ -255,6 +255,31 @@ export default function InteractiveCompanion({
     };
   }, [isDockedContainer]);
 
+  // Handle timer completion shouting animation (for both docked cushion and floating companion)
+  useEffect(() => {
+    if (externalPose === "shout") {
+      if (!isFloating) {
+        setDockedPose("shout");
+      } else {
+        npc.startShouting();
+      }
+    }
+  }, [externalPose, isFloating, npc]);
+
+  useEffect(() => {
+    const handleTimerComplete = () => {
+      if (!isFloating) {
+        setDockedPose("shout");
+      } else {
+        npc.startShouting();
+      }
+    };
+    window.addEventListener("pacana:timer-complete", handleTimerComplete);
+    return () => {
+      window.removeEventListener("pacana:timer-complete", handleTimerComplete);
+    };
+  }, [isFloating, npc]);
+
   // Floating Cappy: Listen for Call Capy Home
   useEffect(() => {
     if (!isFloating || isDockedContainer) return;
@@ -656,6 +681,14 @@ export default function InteractiveCompanion({
                 showHearts={dockedHearts}
                 size={76}
                 isFloating={false}
+                onAnimationComplete={() => {
+                  if (dockedPose === "shout") {
+                    setDockedPose("happy");
+                    setTimeout(() => {
+                      setDockedPose("idle");
+                    }, 800);
+                  }
+                }}
               />
             </div>
 
