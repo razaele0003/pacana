@@ -115,8 +115,8 @@ export default function InteractiveCompanion({
     setCushionSeedState({ stage, treeStage: tStage });
   };
 
-  // Fallback state for stationary docked mode
-  const [dockedPose, setDockedPose] = useState<CapyPose>("idle");
+  // Fallback state for stationary docked mode: cozy sleep nap on cushion
+  const [dockedPose, setDockedPose] = useState<CapyPose>("sleep");
   const [dockedSprout, setDockedSprout] = useState(false);
   const [dockedHearts, setDockedHearts] = useState(false);
   const [dockedZzz, setDockedZzz] = useState(false);
@@ -430,6 +430,39 @@ export default function InteractiveCompanion({
     };
   }, [isFloating, isDockedContainer, npc, onToggleFloating]);
 
+  // Idle cycle while docked on cushion: naturally alternates between sleeping and reading a book
+  useEffect(() => {
+    if (!isDockedContainer || isFloating) return;
+
+    let timer: NodeJS.Timeout;
+
+    const scheduleNext = () => {
+      // Rotate between sleeping (with Zzz) and reading a book every 10 to 18 seconds
+      const delay = 10000 + Math.random() * 8000;
+      timer = setTimeout(() => {
+        setDockedPose((curr) => {
+          if (curr === "sleep") {
+            // Wake up, stretch for 1s, then sit and read a book!
+            setTimeout(() => {
+              setDockedPose("read");
+            }, 1000);
+            return "stretch";
+          } else if (curr === "read" || curr === "idle") {
+            // Settle down for a cozy nap!
+            return "sleep";
+          }
+          return curr;
+        });
+        scheduleNext();
+      }, delay);
+    };
+
+    scheduleNext();
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [isDockedContainer, isFloating]);
+
   // Docked petting handler
   const handleDockedPet = () => {
     setDockedPose("pet");
@@ -439,8 +472,8 @@ export default function InteractiveCompanion({
     playCompanionSound("pet");
     setTimeout(() => {
       setDockedHearts(false);
-      setDockedPose("idle");
-    }, 2000);
+      setDockedPose(Math.random() < 0.5 ? "sleep" : "read");
+    }, 1800);
   };
 
   // 1. Docked Cappy Drag Handler (Smooth Portal Drag across entire screen)
@@ -679,13 +712,14 @@ export default function InteractiveCompanion({
                 facing="right"
                 showSprout={dockedSprout}
                 showHearts={dockedHearts}
+                showZzz={dockedPose === "sleep"}
                 size={76}
                 isFloating={false}
                 onAnimationComplete={() => {
                   if (dockedPose === "shout") {
                     setDockedPose("happy");
                     setTimeout(() => {
-                      setDockedPose("idle");
+                      setDockedPose(Math.random() < 0.5 ? "sleep" : "read");
                     }, 800);
                   }
                 }}
