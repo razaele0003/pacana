@@ -29,6 +29,7 @@ export type CompanionMode =
   | "waking"
   | "dragged"
   | "planting"
+  | "thinking"
   | "idle";
 
 export type CapyGoalType =
@@ -139,10 +140,13 @@ export function useAutonomousCapy({
     viewportRef.current = viewport;
   }, []);
 
-  // Temporary Emote Trigger (~0.8 - 1.2s) - Only thinking emoji displays per user request
+  // Temporary Emote Trigger (~0.8 - 1.4s) - Only thinking emoji displays per user request
   const triggerEmote = useCallback(
     (type: EmoteType, duration = 1100) => {
-      if (emoteTimerRef.current) clearTimeout(emoteTimerRef.current);
+      if (emoteTimerRef.current) {
+        clearTimeout(emoteTimerRef.current);
+        emoteTimerRef.current = null;
+      }
 
       if (type === "thinking") {
         const emote: ActiveEmote = {
@@ -154,11 +158,41 @@ export function useAutonomousCapy({
 
         if (duration > 0) {
           emoteTimerRef.current = setTimeout(() => {
+            emoteTimerRef.current = null;
             setActiveEmote((cur) => (cur?.id === emote.id ? null : cur));
+
+            // After thinking emoji finishes, continue roaming around the page!
+            if (
+              modeRef.current === "wander" ||
+              modeRef.current === "idle" ||
+              modeRef.current === "thinking"
+            ) {
+              currentGoalRef.current = "wander";
+              changeMode("wander");
+              setPose("walk");
+              planNextWanderRef.current();
+            }
           }, duration);
         }
       } else {
         setActiveEmote(null);
+
+        // If another emote was triggered (e.g. from pet or menu), ensure roaming resumes after duration
+        if (duration > 0) {
+          emoteTimerRef.current = setTimeout(() => {
+            emoteTimerRef.current = null;
+            if (
+              modeRef.current === "wander" ||
+              modeRef.current === "idle" ||
+              modeRef.current === "thinking"
+            ) {
+              currentGoalRef.current = "wander";
+              changeMode("wander");
+              setPose("walk");
+              planNextWanderRef.current();
+            }
+          }, duration);
+        }
       }
 
       if (type === "happy") {
@@ -171,7 +205,7 @@ export function useAutonomousCapy({
         playCompanionSound("pop");
       }
     },
-    []
+    [changeMode]
   );
 
   // Plan next continuous wander path
@@ -235,14 +269,8 @@ export function useAutonomousCapy({
           setFacing(nextDx > 0 ? "right" : "left");
         }
       }
-
-      wanderStepCountRef.current++;
-      // Periodic thinking state every 4 wander steps
-      if (wanderStepCountRef.current % 4 === 0) {
-        triggerEmote("thinking", 1000);
-      }
     },
-    [enabled, refreshObstacles, triggerEmote, changeMode]
+    [enabled, refreshObstacles, changeMode]
   );
 
   planNextWanderRef.current = planNextWander;
@@ -515,6 +543,7 @@ export function useAutonomousCapy({
     triggerEmote("happy", 1100);
 
     transitionTimerRef.current = setTimeout(() => {
+      transitionTimerRef.current = null;
       // Resume goal if interrupted!
       if (interruptedGoalRef.current === "press_focus") {
         interruptedGoalRef.current = null;
@@ -614,6 +643,7 @@ export function useAutonomousCapy({
       playCompanionSound("pet");
 
       transitionTimerRef.current = setTimeout(() => {
+        transitionTimerRef.current = null;
         currentGoalRef.current = "wander";
         changeMode("wander");
         setPose("walk");
@@ -627,6 +657,7 @@ export function useAutonomousCapy({
       playCompanionSound("pet");
 
       transitionTimerRef.current = setTimeout(() => {
+        transitionTimerRef.current = null;
         currentGoalRef.current = "wander";
         changeMode("wander");
         setPose("walk");
@@ -693,6 +724,7 @@ export function useAutonomousCapy({
       }, 140);
 
       transitionTimerRef.current = setTimeout(() => {
+        transitionTimerRef.current = null;
         currentGoalRef.current = "wander";
         changeMode("wander");
         setPose("walk");
@@ -720,6 +752,12 @@ export function useAutonomousCapy({
         setPose("walk");
         planNextWander();
       }
+    } else if (modeRef.current === "thinking") {
+      // Thinking animation completed (10 frames finished), resume wandering
+      currentGoalRef.current = "wander";
+      changeMode("wander");
+      setPose("walk");
+      planNextWander();
     }
   }, [triggerEmote, startPressFocus, startApproachingReadyLeaf, planNextWander, changeMode, facing, spawnLeaf]);
 
@@ -956,10 +994,19 @@ export function useAutonomousCapy({
               setPose("eating");
             } else {
               // Reached regular wander waypoint
-              setPose("walk");
-              transitionTimerRef.current = setTimeout(() => {
-                planNextWander();
-              }, 220 + Math.random() * 220);
+              wanderStepCountRef.current++;
+              // Periodic thinking pause every 4 wander waypoints
+              if (wanderStepCountRef.current % 4 === 0) {
+                setPose("thinking");
+                changeMode("thinking");
+                triggerEmote("thinking", 1400);
+              } else {
+                setPose("walk");
+                transitionTimerRef.current = setTimeout(() => {
+                  transitionTimerRef.current = null;
+                  planNextWander();
+                }, 220 + Math.random() * 220);
+              }
             }
           }
         } else {
@@ -971,6 +1018,27 @@ export function useAutonomousCapy({
           setPos(nextPos);
           if (onPosChange) onPosChange(nextPos);
         }
+      }
+
+      // Safety watchdog: If in wander or idle mode with no waypoints and no active timers, resume roaming
+      if (
+        (currentMode === "wander" || currentMode === "idle") &&
+        waypointsRef.current.length === 0 &&
+        !transitionTimerRef.current &&
+        !emoteTimerRef.current &&
+        !isDraggingRef.current
+      ) {
+        transitionTimerRef.current = setTimeout(() => {
+          transitionTimerRef.current = null;
+          if (
+            (modeRef.current === "wander" || modeRef.current === "idle") &&
+            !isDraggingRef.current
+          ) {
+            setPose("walk");
+            changeMode("wander");
+            planNextWander();
+          }
+        }, 400);
       }
 
       animFrameId = requestAnimationFrame(tick);
