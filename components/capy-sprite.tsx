@@ -83,8 +83,9 @@ const ANIMATION_SEQUENCES: Partial<Record<CapyPose, AnimationConfig>> = {
     loop: false,
   },
   curious: {
-    frames: Array.from({ length: 10 }, (_, i) => `/art/cappy/read-${i + 1}.png`),
-    intervalMs: 110,
+    // 8 frames for star emoji: sings into mic with sound sparks
+    frames: Array.from({ length: 8 }, (_, i) => `/art/cappy/shout-${i + 1}.png`),
+    intervalMs: 120,
     loop: false,
   },
   excited: {

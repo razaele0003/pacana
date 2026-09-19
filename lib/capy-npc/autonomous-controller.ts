@@ -203,12 +203,16 @@ export function useAutonomousCapy({
       }
 
       if (type === "happy") {
+        setPose("happy");
         setShowHearts(true);
         playCompanionSound("pet");
         if (duration > 0) {
           setTimeout(() => setShowHearts(false), duration);
         }
-      } else if (type === "curious" || type === "excited" || type === "snack") {
+      } else if (type === "curious") {
+        setPose("curious");
+        playCompanionSound("pop");
+      } else if (type === "excited" || type === "snack") {
         playCompanionSound("pop");
       }
     },
@@ -840,6 +844,12 @@ export function useAutonomousCapy({
       changeMode("wander");
       setPose("walk");
       planNextWander();
+    } else if (pose === "curious") {
+      // Star emoji animation completed (8 frames finished), resume wandering
+      currentGoalRef.current = "wander";
+      changeMode("wander");
+      setPose("walk");
+      planNextWander();
     } else if (modeRef.current === "shouting") {
       // Shouting sequence finished (sound ended and frames 7-8 played)
       setPose("happy");
@@ -854,7 +864,7 @@ export function useAutonomousCapy({
         planNextWander();
       }, 700);
     }
-  }, [triggerEmote, startPressFocus, startApproachingReadyLeaf, planNextWander, changeMode, facing, spawnLeaf]);
+  }, [triggerEmote, startPressFocus, startApproachingReadyLeaf, planNextWander, changeMode, facing, spawnLeaf, pose]);
 
   // Goal: When a tree suddenly pops up on screen and is ready, Capy will ALWAYS go and eat it!
   useEffect(() => {
