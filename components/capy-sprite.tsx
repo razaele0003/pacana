@@ -227,6 +227,12 @@ export default function CapySprite({
     };
   }, [pose]);
 
+  const onAnimationCompleteRef = useRef(onAnimationComplete);
+  onAnimationCompleteRef.current = onAnimationComplete;
+
+  const onFrameRef = useRef(onFrame);
+  onFrameRef.current = onFrame;
+
   // Frame sequence playback loop
   useEffect(() => {
     const config = ANIMATION_SEQUENCES[pose];
@@ -237,14 +243,14 @@ export default function CapySprite({
 
     setFrameIdx(0);
     setTimeout(() => {
-      if (onFrame) onFrame(0);
+      if (onFrameRef.current) onFrameRef.current(0);
     }, 0);
 
     const interval = setInterval(() => {
       setFrameIdx((current) => {
         // If shouting, hold on frame 6 (index 5: shout-6.png) for however long the sound is!
         if (pose === "shout" && current === 5 && isSoundPlayingRef.current) {
-          if (onFrame) onFrame(5);
+          if (onFrameRef.current) onFrameRef.current(5);
           return 5;
         }
 
@@ -252,28 +258,28 @@ export default function CapySprite({
         if (next >= config.frames.length) {
           if (config.loop) {
             setTimeout(() => {
-              if (onFrame) onFrame(0);
+              if (onFrameRef.current) onFrameRef.current(0);
             }, 0);
             return 0;
           } else {
             // Sequence finished
             clearInterval(interval);
             setTimeout(() => {
-              if (onFrame) onFrame(config.frames.length - 1);
-              if (onAnimationComplete) onAnimationComplete();
+              if (onFrameRef.current) onFrameRef.current(config.frames.length - 1);
+              if (onAnimationCompleteRef.current) onAnimationCompleteRef.current();
             }, 0);
             return config.frames.length - 1;
           }
         }
         setTimeout(() => {
-          if (onFrame) onFrame(next);
+          if (onFrameRef.current) onFrameRef.current(next);
         }, 0);
         return next;
       });
     }, config.intervalMs);
 
     return () => clearInterval(interval);
-  }, [pose, isPaused, onAnimationComplete, onFrame]);
+  }, [pose, isPaused]);
 
   // Determine current image frame
   let imageSrc = STATIC_POSE_IMAGES[pose] || STATIC_POSE_IMAGES.idle || "/art/cappy/walk-1.png";

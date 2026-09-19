@@ -67,7 +67,7 @@ export function CushionSeed({
 
 // Shared cushion seed stage & tree stage persisted across unmounts/tab navigation
 let sharedCushionSeedStage: CushionSeedStage = "none";
-let sharedCushionTreeStage: number = 1;
+let sharedCushionTreeStage: number = 2;
 
 export default function InteractiveCompanion({
   isFloating,
@@ -97,7 +97,7 @@ export default function InteractiveCompanion({
         ? sharedCushionSeedStage
         : "planted"
       : "none",
-    treeStage: isFloating ? sharedCushionTreeStage : 1,
+    treeStage: isFloating ? (sharedCushionTreeStage > 1 ? sharedCushionTreeStage : 2) : 1,
   }));
   const fallTimerRef = useRef<NodeJS.Timeout | null>(null);
   const growthIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -107,7 +107,9 @@ export default function InteractiveCompanion({
       treeStage ??
       (stage === "ready"
         ? 10
-        : stage === "planted" || stage === "falling"
+        : stage === "planted"
+        ? 2
+        : stage === "falling"
         ? 1
         : cushionSeedState.treeStage);
     sharedCushionSeedStage = stage;
@@ -206,7 +208,7 @@ export default function InteractiveCompanion({
         updateCushionSeed("falling", 1);
         playCompanionSound("pop");
         setTimeout(() => {
-          updateCushionSeed("planted", 1);
+          updateCushionSeed("planted", 2);
         }, 450);
       }, 1400);
     };
@@ -655,8 +657,8 @@ export default function InteractiveCompanion({
               window.dispatchEvent(new CustomEvent("pacana:call-cappy-home"));
             }}
           >
-            <Home size={13} />{" "}
-            {isBusyGrowingOrEaten ? "Capy is on the way..." : "Call Capy home"}
+            <Home size={13} />
+            <span>{isBusyGrowingOrEaten ? "Capy is on the way..." : "Call Capy home"}</span>
           </button>
         </div>
       </div>
@@ -694,19 +696,6 @@ export default function InteractiveCompanion({
             title="Click to pet Capy · Drag out to explore · Or click button below"
           >
             <div className="docked-companion-stage">
-              {isGettingUp && (
-                <div
-                  style={{
-                    position: "absolute",
-                    bottom: 24,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    zIndex: 0,
-                  }}
-                >
-                  <CushionSeed stage="planted" treeStage={1} />
-                </div>
-              )}
               <CapySprite
                 pose={dockedPose}
                 facing="right"
@@ -721,6 +710,30 @@ export default function InteractiveCompanion({
                     setTimeout(() => {
                       setDockedPose(Math.random() < 0.5 ? "sleep" : "read");
                     }, 800);
+                  } else if (dockedPose === "plant") {
+                    // Planting animation completed through all 8 frames to plant-8.png (the sprout is planted!)
+                    updateCushionSeed("planted", 2);
+                    setDockedHearts(true);
+                    playCompanionSound("pet");
+
+                    // Hold on the planted sprout for 600ms so Capy and the user see it's planted!
+                    setTimeout(() => {
+                      setIsGettingUp(false);
+                      setDockedHearts(false);
+                      setDockedPose("idle");
+
+                      const rect = rootRef.current?.getBoundingClientRect();
+                      const isCushionOnRight = rect ? rect.left > 300 : true;
+                      const startPos = rect
+                        ? {
+                            x: isCushionOnRight
+                              ? Math.max(24, rect.left - 96)
+                              : Math.max(24, rect.right + 12),
+                            y: Math.max(48, rect.top),
+                          }
+                        : undefined;
+                      onToggleFloating(true, startPos);
+                    }, 600);
                   }
                 }}
               />
@@ -738,31 +751,33 @@ export default function InteractiveCompanion({
 
                   // 1. Getting up & planting seed sequence on the cushion
                   setIsGettingUp(true);
-                  setDockedPose("plant"); // 8-frame planting animation
-                  updateCushionSeed("planted", 1);
+                  setDockedPose("plant"); // 8-frame planting animation (runs to completion)
                   playCompanionSound("pop");
 
-                  // 2. Measure cushion position to start walking towards open room
-                  const rect = rootRef.current?.getBoundingClientRect();
-                  const isCushionOnRight = rect ? rect.left > 300 : true;
-                  const startPos = rect
-                    ? {
-                        x: isCushionOnRight
-                          ? Math.max(24, rect.left - 96)
-                          : Math.max(24, rect.right + 12),
-                        y: Math.max(48, rect.top),
-                      }
-                    : undefined;
-
-                  // 3. After planting sequence completes (8 frames * 130ms = 1040ms), step out and start walking!
+                  // Safety fallback: if animation complete doesn't trigger within 2.5s, step out
                   setTimeout(() => {
-                    setIsGettingUp(false);
-                    setDockedPose("idle");
-                    onToggleFloating(true, startPos);
-                  }, 1040);
+                    if (isGettingUp) {
+                      updateCushionSeed("planted", 2);
+                      setIsGettingUp(false);
+                      setDockedHearts(false);
+                      setDockedPose("idle");
+                      const rect = rootRef.current?.getBoundingClientRect();
+                      const isCushionOnRight = rect ? rect.left > 300 : true;
+                      const startPos = rect
+                        ? {
+                            x: isCushionOnRight
+                              ? Math.max(24, rect.left - 96)
+                              : Math.max(24, rect.right + 12),
+                            y: Math.max(48, rect.top),
+                          }
+                        : undefined;
+                      onToggleFloating(true, startPos);
+                    }
+                  }, 2500);
                 }}
               >
-                <Move size={12} /> {isGettingUp ? "Planting seed..." : "Let Capy wander"}
+                <Move size={13} />
+                <span>{isGettingUp ? "Planting seed..." : "Let Capy wander"}</span>
               </button>
             </div>
           </div>
