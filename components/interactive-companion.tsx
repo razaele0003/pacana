@@ -775,30 +775,6 @@ export default function InteractiveCompanion({
                 onAnimationComplete={() => {
                   if (dockedPose === "shout") {
                     setDockedPose("idle");
-                  } else if (dockedPose === "plant") {
-                    // Planting animation completed through all 8 frames to plant-8.png (the sprout is planted!)
-                    updateCushionSeed("planted", 2);
-                    setDockedHearts(true);
-                    playCompanionSound("pet");
-
-                    // Hold on the planted sprout for 600ms so Capy and the user see it's planted!
-                    setTimeout(() => {
-                      setIsGettingUp(false);
-                      setDockedHearts(false);
-                      setDockedPose("idle");
-
-                      const rect = rootRef.current?.getBoundingClientRect();
-                      const isCushionOnRight = rect ? rect.left > 300 : true;
-                      const startPos = rect
-                        ? {
-                            x: isCushionOnRight
-                              ? Math.max(24, rect.left - 96)
-                              : Math.max(24, rect.right + 12),
-                            y: Math.max(48, rect.top),
-                          }
-                        : undefined;
-                      onToggleFloating(true, startPos);
-                    }, 600);
                   }
                 }}
               />
@@ -816,29 +792,34 @@ export default function InteractiveCompanion({
 
                   // 1. Getting up & planting seed sequence on the cushion
                   setIsGettingUp(true);
-                  setDockedPose("plant"); // 8-frame planting animation (runs to completion)
+                  setDockedPose("plant"); // 8-frame planting animation
                   playCompanionSound("pop");
 
-                  // Safety fallback: if animation complete doesn't trigger within 2.5s, step out
+                  // 2. Show hearts & update cushion seed as planting concludes
                   setTimeout(() => {
-                    if (isGettingUp) {
-                      updateCushionSeed("planted", 2);
-                      setIsGettingUp(false);
-                      setDockedHearts(false);
-                      setDockedPose("idle");
-                      const rect = rootRef.current?.getBoundingClientRect();
-                      const isCushionOnRight = rect ? rect.left > 300 : true;
-                      const startPos = rect
-                        ? {
-                            x: isCushionOnRight
-                              ? Math.max(24, rect.left - 96)
-                              : Math.max(24, rect.right + 12),
-                            y: Math.max(48, rect.top),
-                          }
-                        : undefined;
-                      onToggleFloating(true, startPos);
-                    }
-                  }, 2500);
+                    updateCushionSeed("planted", 2);
+                    setDockedHearts(true);
+                    playCompanionSound("pet");
+                  }, 900);
+
+                  // 3. Step out into wandering mode reliably
+                  setTimeout(() => {
+                    setIsGettingUp(false);
+                    setDockedHearts(false);
+                    setDockedPose("idle");
+
+                    const rect = rootRef.current?.getBoundingClientRect();
+                    const isCushionOnRight = rect ? rect.left > 300 : true;
+                    const startPos = rect
+                      ? {
+                          x: isCushionOnRight
+                            ? Math.max(24, rect.left - 96)
+                            : Math.max(24, rect.right + 12),
+                          y: Math.max(48, rect.top),
+                        }
+                      : undefined;
+                    onToggleFloating(true, startPos);
+                  }, 1500);
                 }}
               >
                 <Move size={13} />
