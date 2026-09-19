@@ -1098,14 +1098,7 @@ export default function Pacana() {
         </Modal>
       )}
       {!state.settings.onboarded && (
-        <Modal
-          title="Welcome to your little focus nook."
-          close={() =>
-            void update((s) => {
-              s.settings.onboarded = true;
-            })
-          }
-        >
+        <Modal title="Welcome to your little focus nook.">
           <img
             className="welcome-art"
             src="/art/forest.webp"
@@ -1129,16 +1122,6 @@ export default function Pacana() {
           >
             Make myself at home <ArrowRight size={17} />
           </button>
-          <button
-            className="text-link"
-            onClick={() =>
-              void update((s) => {
-                s.settings.onboarded = true;
-              })
-            }
-          >
-            Skip introduction
-          </button>
         </Modal>
       )}
     </div>
@@ -1158,7 +1141,7 @@ function Modal({
   children,
 }: {
   title: string;
-  close: () => void;
+  close?: () => void;
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -1168,16 +1151,28 @@ function Modal({
     return () => d?.close();
   }, []);
   return (
-    <dialog ref={ref} className="modal" onCancel={close}>
+    <dialog
+      ref={ref}
+      className="modal"
+      onCancel={(e) => {
+        if (close) {
+          close();
+        } else {
+          e.preventDefault();
+        }
+      }}
+    >
       <div className="section-title">
         <h2>{title}</h2>
-        <button
-          className="icon-button"
-          aria-label="Close dialog"
-          onClick={close}
-        >
-          <X />
-        </button>
+        {close && (
+          <button
+            className="icon-button"
+            aria-label="Close dialog"
+            onClick={close}
+          >
+            <X />
+          </button>
+        )}
       </div>
       {children}
     </dialog>
