@@ -357,8 +357,34 @@ export default function Pacana() {
     setTab(name);
     setNotice("");
   };
+  const hourNum = new Date(now).getHours();
+  const greeting =
+    hourNum >= 5 && hourNum < 12
+      ? "Good morning"
+      : hourNum >= 12 && hourNum < 18
+        ? "Good afternoon"
+        : "Good evening";
+  const userName = "Eleazar";
+  const formattedDate = new Intl.DateTimeFormat("en", {
+    timeZone: state.settings.timezone,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(now);
   return (
     <div className="app-shell">
+      <div className="desktop-titlebar" aria-hidden="true">
+        <div className="titlebar-left">
+          <span className="titlebar-icon">
+            <Leaf size={12} strokeWidth={2.6} />
+          </span>
+          <span className="titlebar-title">Pacana</span>
+        </div>
+        <div className="titlebar-right">
+          <div className="titlebar-drag-region" />
+        </div>
+      </div>
       <aside className="sidebar">
         <a
           className="brand"
@@ -418,10 +444,16 @@ export default function Pacana() {
       </aside>
       <div className="app-body">
         <header className="topbar">
-          <span className="breadcrumb">
-            Your woodland retreat <ChevronRight size={14} />{" "}
-            <strong>{tab}</strong>
-          </span>
+          <div className="header-greeting">
+            <span className="greeting-leaf">
+              <Leaf size={16} />
+            </span>
+            <strong className="greeting-text">
+              {tab === "Focus"
+                ? `${greeting}, ${userName}!`
+                : `${greeting}, ${userName}! · ${tab}`}
+            </strong>
+          </div>
           <a
             className="mobile-brand"
             href="/"
@@ -438,16 +470,17 @@ export default function Pacana() {
             pacana <Leaf size={20} />
           </a>
           <div className="top-actions">
-            <span className="clock">
-              <Sun size={17} />
-              {time(now)}
+            <span className="header-date">
+              <Sun size={15} className="sun-icon" />
+              <span className="date-sep">|</span>
+              <span>{formattedDate}</span>
             </span>
             <button
               className="icon-button"
               aria-label="Settings"
               onClick={() => choose("Settings")}
             >
-              <Settings2 size={20} />
+              <Settings2 size={19} />
             </button>
             <span className="level-chip">
               <Sprout size={16} /> Level {Math.floor(xp / 100) + 1}

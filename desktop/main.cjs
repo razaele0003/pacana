@@ -152,7 +152,7 @@ else {
         titleBarOverlay: {
           color: "#f8f6ef",
           symbolColor: "#40372f",
-          height: 40,
+          height: 36,
         },
         webPreferences: {
           nodeIntegration: false,

@@ -2569,14 +2569,125 @@ body.is-desktop a {
   user-drag: none;
 }
 
-/* Seamless Titlebar & Draggable Regions */
-body.is-desktop .topbar {
+/* Seamless Desktop Titlebar (36px high strip) */
+.desktop-titlebar {
+  display: none;
+  height: 36px;
+  width: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
   -webkit-app-region: drag;
-  padding-right: 155px; /* Leaves room for Windows native minimize/maximize/close overlay */
+  user-select: none;
+  -webkit-user-select: none;
+  box-sizing: border-box;
 }
 
-body.is-desktop .sidebar {
+body.is-desktop .desktop-titlebar {
+  display: flex;
+}
+
+.titlebar-left {
+  width: 218px;
+  min-width: 218px;
+  height: 100%;
+  background: #ede8dc;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 16px;
+  box-sizing: border-box;
   -webkit-app-region: drag;
+}
+
+.titlebar-icon {
+  width: 19px;
+  height: 19px;
+  background: var(--green);
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fffdf5;
+  flex-shrink: 0;
+}
+
+.titlebar-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: 0.1px;
+}
+
+.titlebar-right {
+  flex: 1;
+  height: 100%;
+  background: var(--cream);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  -webkit-app-region: drag;
+}
+
+.titlebar-drag-region {
+  flex: 1;
+  height: 100%;
+  -webkit-app-region: drag;
+}
+
+/* Adjust sidebar and workspace layout in desktop mode */
+body.is-desktop .sidebar {
+  top: 36px;
+  height: calc(100vh - 36px);
+  padding: 22px 20px 20px;
+}
+
+body.is-desktop .app-body {
+  margin-top: 36px;
+}
+
+/* Header greeting & date styling */
+.header-greeting {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.greeting-leaf {
+  color: var(--green);
+  display: inline-flex;
+  align-items: center;
+}
+
+.greeting-text {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.2px;
+}
+
+.header-date {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.header-date .sun-icon {
+  color: #e5bc71;
+  flex-shrink: 0;
+}
+
+.header-date .date-sep {
+  color: #cfcabb;
+  font-weight: 300;
+  margin: 0 1px;
 }
 
 /* Ensure interactive controls inside draggable areas remain clickable */
@@ -2585,7 +2696,7 @@ body.is-desktop .topbar a,
 body.is-desktop .topbar input,
 body.is-desktop .topbar select,
 body.is-desktop .topbar .level-chip,
-body.is-desktop .topbar .clock,
+body.is-desktop .topbar .header-date,
 body.is-desktop .sidebar button,
 body.is-desktop .sidebar a,
 body.is-desktop .sidebar input,
@@ -2594,8 +2705,17 @@ body.is-desktop .sidebar .grow-card {
   -webkit-app-region: no-drag;
 }
 
-/* Fullscreen mode: no window control overlay, restore standard padding */
-body.is-desktop.is-fullscreen .topbar {
-  padding-right: 38px;
+/* Fullscreen mode: titlebar hidden */
+body.is-desktop.is-fullscreen .desktop-titlebar {
+  display: none;
+}
+
+body.is-desktop.is-fullscreen .sidebar {
+  top: 0;
+  height: 100vh;
+}
+
+body.is-desktop.is-fullscreen .app-body {
+  margin-top: 0;
 }
 
