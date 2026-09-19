@@ -308,7 +308,7 @@ export default function Pacana() {
           lastTick.current > 0 &&
           current - lastTick.current < 2500;
         const { state: s, result } = await transact((s) =>
-          reconcile(s, current, auto),
+          reconcile(s, current, false),
         );
         if (live) {
           setState(s);
@@ -317,23 +317,84 @@ export default function Pacana() {
               ? "Your session is complete. Take a little breath."
               : `${result.checkpoints} check-in${result.checkpoints === 1 ? "" : "s"} ready to log.`;
             setNotice(text);
+
             if (result.completed) {
+              const completedTimer = s.timer;
+              const completedPhase = completedTimer?.phase;
+              const shouldAutoStart =
+                auto &&
+                (completedPhase === "focus"
+                  ? s.settings.autoBreak
+                  : s.settings.autoFocus);
+              const upcomingPhase = nextPhase(s);
+              const taskToContinue = completedTimer?.task;
+              const catToContinue = completedTimer?.category;
+
               window.dispatchEvent(
                 new CustomEvent("pacana:timer-complete", {
-                  detail: { phase: s.timer?.phase },
+                  detail: { phase: completedPhase },
                 }),
               );
+
+              if (shouldAutoStart) {
+                let started = false;
+                let fallbackTimer: NodeJS.Timeout | null = null;
+
+                const startNextSession = () => {
+                  if (started) return;
+                  started = true;
+                  window.removeEventListener("pacana:sound-ended", handleSoundEnded);
+                  if (fallbackTimer) clearTimeout(fallbackTimer);
+                  void update((latestState) => {
+                    if (latestState.timer?.status === "complete") {
+                      startPhase(
+                        latestState,
+                        Date.now(),
+                        upcomingPhase,
+                        taskToContinue,
+                        catToContinue,
+                      );
+                    }
+                  });
+                };
+
+                const handleSoundEnded = () => {
+                  startNextSession();
+                };
+
+                window.addEventListener("pacana:sound-ended", handleSoundEnded, {
+                  once: true,
+                });
+
+                // Safety fallback in case sound fails or event is missed
+                fallbackTimer = setTimeout(startNextSession, 15000);
+
+                void alertUser(s.settings, "Pacana · A little check-in", text, {
+                  forceSound: true,
+                }).then((soundPlayed) => {
+                  if (live && !soundPlayed) {
+                    setNotice(
+                      "Your timer finished, but sound is blocked. Click the speaker icon to enable and test it.",
+                    );
+                    setTimeout(startNextSession, 1800);
+                  }
+                });
+              } else {
+                void alertUser(s.settings, "Pacana · A little check-in", text, {
+                  forceSound: true,
+                }).then((soundPlayed) => {
+                  if (live && !soundPlayed) {
+                    setNotice(
+                      "Your timer finished, but sound is blocked. Click the speaker icon to enable and test it.",
+                    );
+                  }
+                });
+              }
+            } else {
+              void alertUser(s.settings, "Pacana · A little check-in", text, {
+                forceSound: false,
+              });
             }
-            void alertUser(s.settings, "Pacana · A little check-in", text, {
-              // A finished focus or break phase is always an alarm. Check-in
-              // chimes still follow the optional reminder-sound preference.
-              forceSound: result.completed,
-            }).then((soundPlayed) => {
-              if (live && result.completed && !soundPlayed)
-                setNotice(
-                  "Your timer finished, but sound is blocked. Click the speaker icon to enable and test it.",
-                );
-            });
           }
         }
       } catch (e) {
