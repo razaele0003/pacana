@@ -2,6 +2,8 @@ const {
   app,
   BrowserWindow,
   Menu,
+  Tray,
+  nativeImage,
   protocol,
   session,
   dialog,
@@ -31,11 +33,20 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 let window;
+let tray = null;
+let isQuitting = false;
+let minimizeToTray = true;
+
+app.on("before-quit", () => {
+  isQuitting = true;
+});
+
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", () => {
     if (window) {
       if (window.isMinimized()) window.restore();
+      if (!window.isVisible()) window.show();
       window.focus();
     }
   });
@@ -117,8 +128,10 @@ else {
           },
         ]),
       );
+      const iconPath = path.join(__dirname, "icon.png");
       window = new BrowserWindow({
         title: "Pacana",
+        icon: iconPath,
         width: 1280,
         height: 900,
         minWidth: 390,
@@ -137,8 +150,90 @@ else {
       window.webContents.on("will-navigate", (event, url) => {
         if (!url.startsWith("pacana://app/")) event.preventDefault();
       });
+      window.on("close", (event) => {
+        if (!isQuitting && !smoke && minimizeToTray) {
+          event.preventDefault();
+          window.hide();
+        }
+      });
       window.once("ready-to-show", () => window.show());
       await window.loadURL("pacana://app/app");
+
+      if (!smoke) {
+        try {
+          const trayIconPath = path.join(__dirname, "tray-icon.png");
+          const trayIcon = nativeImage.createFromPath(trayIconPath);
+          tray = new Tray(trayIcon);
+          tray.setToolTip("Pacana — Cozy Focus & Time Journal");
+
+          const updateTrayMenu = () => {
+            const loginSettings = app.getLoginItemSettings();
+            const contextMenu = Menu.buildFromTemplate([
+              {
+                label: "Show Pacana",
+                click: () => {
+                  if (window) {
+                    if (window.isMinimized()) window.restore();
+                    window.show();
+                    window.focus();
+                  }
+                },
+              },
+              { type: "separator" },
+              {
+                label: "Launch on Startup",
+                type: "checkbox",
+                checked: loginSettings.openAtLogin,
+                click: (item) => {
+                  app.setLoginItemSettings({
+                    openAtLogin: item.checked,
+                    path: process.execPath,
+                  });
+                  updateTrayMenu();
+                },
+              },
+              {
+                label: "Minimize to Tray on Close",
+                type: "checkbox",
+                checked: minimizeToTray,
+                click: (item) => {
+                  minimizeToTray = item.checked;
+                  updateTrayMenu();
+                },
+              },
+              { type: "separator" },
+              {
+                label: "Quit Pacana",
+                click: () => {
+                  isQuitting = true;
+                  app.quit();
+                },
+              },
+            ]);
+            tray.setContextMenu(contextMenu);
+          };
+
+          updateTrayMenu();
+
+          tray.on("click", () => {
+            if (window) {
+              if (window.isVisible() && !window.isMinimized()) {
+                if (window.isFocused()) {
+                  window.hide();
+                } else {
+                  window.focus();
+                }
+              } else {
+                if (window.isMinimized()) window.restore();
+                window.show();
+                window.focus();
+              }
+            }
+          });
+        } catch (err) {
+          console.error("Failed to initialize tray:", err);
+        }
+      }
       if (smoke) {
         try {
           await new Promise((resolve) => setTimeout(resolve, 1800));
@@ -180,5 +275,9 @@ else {
       dialog.showErrorBox("Pacana could not open", error.message);
       app.exit(1);
     });
-  app.on("window-all-closed", () => app.quit());
+  app.on("window-all-closed", () => {
+    if (isQuitting || smoke || !minimizeToTray) {
+      app.quit();
+    }
+  });
 }

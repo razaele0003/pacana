@@ -18,6 +18,7 @@ const outputs = await packager({
   dir: root,
   out: "desktop-output",
   name: "Pacana",
+  icon: path.resolve("desktop/icon.ico"),
   platform: "win32",
   arch: "x64",
   overwrite: true,
