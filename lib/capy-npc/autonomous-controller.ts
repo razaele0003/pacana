@@ -388,22 +388,15 @@ export function useAutonomousCapy({
         }
       }
 
-      // Happy / surprise reaction when spotting the tree, then walk towards it
-      waypointsRef.current = [];
-      currentGoalRef.current = "eat_snack";
-      setPose("happy");
-      playCompanionSound("pop");
-
+      // Immediately set path and walk towards the tree snack
       if (transitionTimerRef.current) {
         clearTimeout(transitionTimerRef.current);
-      }
-
-      transitionTimerRef.current = setTimeout(() => {
         transitionTimerRef.current = null;
-        waypointsRef.current = path;
-        changeMode("walk_to_snack");
-        setPose("walk");
-      }, 550);
+      }
+      waypointsRef.current = path;
+      currentGoalRef.current = "eat_snack";
+      changeMode("walk_to_snack");
+      setPose("walk");
     },
     [refreshObstacles, changeMode]
   );
@@ -609,7 +602,6 @@ export function useAutonomousCapy({
     };
 
     setActiveLeaf(leaf);
-    playCompanionSound("pop");
 
     let step = 1;
     const growthInterval = setInterval(() => {
@@ -792,7 +784,6 @@ export function useAutonomousCapy({
       };
 
       setActiveLeaf(leaf);
-      playCompanionSound("pop");
       setPose("happy");
       changeMode("happy");
       triggerEmote("happy", 800);
