@@ -1176,6 +1176,61 @@ progress::-webkit-progress-value {
   justify-content: space-between;
   align-items: center;
 }
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.nav-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--green);
+  padding: 8px 14px;
+  border-radius: 11px;
+  transition: background 0.18s, color 0.18s;
+}
+.nav-download:hover {
+  background: var(--sage);
+  color: var(--green-dark);
+}
+.landing-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.landing-actions.bottom {
+  justify-content: center;
+  margin-top: 10px;
+}
+.secondary-button {
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--green);
+  border: 1px solid var(--line);
+  border-bottom: 3px solid #b5c2a3;
+  border-radius: 13px;
+  min-height: 48px;
+  padding: 12px 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-weight: 900;
+  backdrop-filter: blur(8px);
+  transition: background 0.18s, transform 0.18s, border-color 0.18s, color 0.18s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.secondary-button:hover {
+  background: #ffffff;
+  border-color: var(--green);
+  color: var(--green-dark);
+}
+.secondary-button:active {
+  transform: translateY(1px);
+}
 .landing-hero {
   max-width: 1380px;
   margin: 0 auto;

@@ -7,6 +7,7 @@ import {
   Clock3,
   BookOpen,
   Sprout,
+  Download,
 } from "lucide-react";
 export default function Landing() {
   return (
@@ -18,9 +19,19 @@ export default function Landing() {
           </span>
           pacana
         </a>
-        <a className="primary" href="/app">
-          Open Pacana <ArrowRight size={17} />
-        </a>
+        <div className="nav-actions">
+          <a
+            className="nav-download"
+            href="https://github.com/razaele0003/pacana/releases"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Download size={16} /> Windows App
+          </a>
+          <a className="primary" href="/app">
+            Open Pacana <ArrowRight size={17} />
+          </a>
+        </div>
       </header>
       <main>
         <section className="landing-hero">
@@ -41,11 +52,21 @@ export default function Landing() {
               <br />
               Remember where your time went.
             </p>
-            <a href="/app" className="primary">
-              Make room for focus <ArrowRight size={19} />
-            </a>
+            <div className="landing-actions">
+              <a href="/app" className="primary">
+                Make room for focus <ArrowRight size={19} />
+              </a>
+              <a
+                href="https://github.com/razaele0003/pacana/releases"
+                target="_blank"
+                rel="noreferrer"
+                className="secondary-button"
+              >
+                <Download size={18} /> Download for Windows
+              </a>
+            </div>
             <span className="landing-note">
-              Free to focus. Yours to keep. No account needed.
+              Free to focus. Yours to keep. Available on Web and Windows PC.
             </span>
           </div>
         </section>
@@ -94,9 +115,19 @@ export default function Landing() {
           <p>
             Your journal stays on this device. Back it up whenever you like.
           </p>
-          <a href="/app" className="primary">
-            Open Pacana <ArrowRight size={18} />
-          </a>
+          <div className="landing-actions bottom">
+            <a href="/app" className="primary">
+              Open Pacana <ArrowRight size={18} />
+            </a>
+            <a
+              href="https://github.com/razaele0003/pacana/releases"
+              target="_blank"
+              rel="noreferrer"
+              className="secondary-button"
+            >
+              <Download size={18} /> Download for Windows
+            </a>
+          </div>
         </section>
       </main>
       <footer className="landing-footer">
