@@ -540,28 +540,81 @@ select {
   display: flex;
   align-items: center;
   gap: 13px;
-  padding: 18px;
+  padding: 16px 18px;
   margin-top: 19px;
+  min-height: 72px;
+}
+.task-card .soft-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .task-card .field {
   flex: 1;
   margin: 0;
   font-size: 8px;
   letter-spacing: 1px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .task-card input {
-  padding: 5px 0;
+  padding: 4px 0;
   background: transparent;
   border: 0;
   font-size: 13px;
-  min-height: 30px;
+  min-height: 28px;
   letter-spacing: 0;
+  outline: none;
 }
-.task-card select {
-  width: 100px;
+.task-category-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.task-category-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background: #fdfdf9;
+  border: 1px solid #dcded1;
+  border-radius: 9px;
+  padding: 0 28px 0 12px;
+  height: 38px;
   font-size: 12px;
-  padding: 7px;
-  min-height: 36px;
+  font-family: inherit;
+  font-weight: 500;
+  color: #3b3a36;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  min-width: 96px;
+}
+.task-category-select:hover:not(:disabled) {
+  border-color: #bcc0aa;
+  background: #ffffff;
+}
+.task-category-select:focus {
+  border-color: var(--green, #556b2f);
+  box-shadow: 0 0 0 2px rgba(85, 107, 47, 0.15);
+}
+.task-category-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.task-category-chevron {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #7b786f;
+  transition: color 0.15s ease;
+}
+.task-category-wrapper:focus-within .task-category-chevron {
+  color: var(--green, #556b2f);
 }
 .mini-stats {
   display: grid;
@@ -676,18 +729,30 @@ select {
 .kind-note {
   margin-top: auto;
   border-radius: 13px;
-  padding: 20px;
+  padding: 18px 16px 16px;
   background: #edf0df;
   text-align: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 228px;
+  min-height: 228px;
+  max-height: 228px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
 }
 .kind-note svg {
   margin: 0 auto 12px;
   color: #7f9065;
 }
-.kind-note p {
+.kind-note p:not(.empty-text) {
   font-size: 13px;
   font-style: italic;
   color: #6d7758;
+  margin: 0;
+  line-height: 1.35;
 }
 .timeline {
   margin: 20px 0;
@@ -1745,7 +1810,7 @@ progress::-webkit-progress-value {
   padding: 0;
   background: #182c23;
   color: #fbf5e5;
-  overflow: auto;
+  overflow: hidden;
 }
 .fullscreen-timer::backdrop {
   background: #14271fed;
@@ -1755,13 +1820,16 @@ progress::-webkit-progress-value {
   height: 100vh;
 }
 .fullscreen-inner {
-  min-height: 100%;
+  height: 100%;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background:
     radial-gradient(ellipse at 50% 40%, #42624755, transparent 65%),
     linear-gradient(150deg, #263d2d, #14251e);
   animation: focus-pop 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 .fullscreen-header,
 .fullscreen-footer {
@@ -2295,222 +2363,1166 @@ progress::-webkit-progress-value {
   color: #883c26;
   font-size: 12px;
 }
-.capy-companion {
-  padding: 0 38px;
+/* ==========================================================================
+   Wandering Capybara (Fullscreen Timer Mode)
+   ========================================================================== */
+
+.fullscreen-autonomous-capy {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  will-change: transform;
+  filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.45));
 }
-.capy-trail {
-  height: 76px;
-  position: relative;
-  overflow: hidden;
+
+.fullscreen-autonomous-capy:active {
+  cursor: grabbing;
+}
+
+.fullscreen-capy-controls {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  background: rgba(22, 34, 25, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 20;
+  animation: mini-controls-pop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.fullscreen-capy-controls .mini-btn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  border-radius: 50%;
+  color: #cad5b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.fullscreen-capy-controls .mini-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+/* ==========================================================================
+   Spawned Leaf Snack Component
+   ========================================================================== */
+
+.cappy-spawned-leaf {
+  position: fixed;
+  z-index: 9998;
+  width: 54px;
+  height: 54px;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  transition: transform 0.3s ease-out;
+}
+
+.cappy-spawned-leaf.stage-sprouting {
+  animation: plant-sprout 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.cappy-spawned-leaf.stage-growing {
+  animation: plant-grow 0.6s ease-out forwards;
+}
+
+.cappy-spawned-leaf.stage-ready {
+  animation: plant-ready-pop 0.35s ease-out forwards;
+}
+
+.cappy-spawned-leaf .leaf-art-wrapper {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  animation: tree-snack-breathe 2.5s ease-in-out infinite alternate;
+}
+
+.cappy-spawned-leaf .leaf-sprite-img {
+  max-width: 50px;
+  max-height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 10px rgba(45, 80, 50, 0.35));
+  transition: transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+.cappy-spawned-leaf .leaf-sprite-img.tree-img-1 {
+  max-height: 22px;
+}
+.cappy-spawned-leaf .leaf-sprite-img.tree-img-2 {
+  max-height: 28px;
+}
+.cappy-spawned-leaf .leaf-sprite-img.tree-img-3 {
+  max-height: 32px;
+}
+.cappy-spawned-leaf .leaf-sprite-img.tree-img-4 {
+  max-height: 36px;
+}
+.cappy-spawned-leaf .leaf-sprite-img.tree-img-5 {
+  max-height: 40px;
+}
+.cappy-spawned-leaf .leaf-sprite-img.tree-img-6,
+.cappy-spawned-leaf .leaf-sprite-img.tree-img-7,
+.cappy-spawned-leaf .leaf-sprite-img.tree-img-8,
+.cappy-spawned-leaf .leaf-sprite-img.tree-img-9,
+.cappy-spawned-leaf .leaf-sprite-img.tree-img-10 {
+  max-height: 48px;
+}
+
+.cappy-spawned-leaf .leaf-beacon-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 56px;
+  height: 56px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(135, 175, 120, 0.4) 0%, rgba(135, 175, 120, 0) 70%);
+  animation: leaf-beacon 2s ease-in-out infinite;
   pointer-events: none;
 }
-.capy-wander {
-  width: 86px;
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  animation: capy-stroll 38s linear infinite alternate;
+
+.cappy-spawned-leaf.is-being-eaten {
+  animation: leaf-eaten 1s ease-in forwards;
 }
-.capy-facing {
-  animation: capy-turn 76s steps(1, end) infinite;
-}
-.capy-sprite {
-  width: 86px;
-  height: 65px;
-  overflow: visible;
-}
-.capy-body {
-  animation: capy-bob 0.6s ease-in-out infinite;
-}
-.capy-foot {
-  transform-box: fill-box;
-  transform-origin: center top;
-  animation: capy-step 0.6s ease-in-out infinite alternate;
-}
-.capy-foot-back {
-  animation-delay: -0.6s;
-}
-.capy-rest {
-  display: block;
-  margin: 0 auto;
-  padding: 6px 12px;
-  color: #cad5b8;
-  font-size: 12px;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.is-resting .capy-wander,
-.is-resting .capy-facing,
-.is-resting .capy-body,
-.is-resting .capy-foot {
-  animation-play-state: paused;
-}
-@keyframes capy-stroll {
-  from {
-    left: 0;
-  }
-  to {
-    left: calc(100% - 86px);
-  }
-}
-@keyframes capy-turn {
+
+@keyframes tree-snack-breathe {
   0% {
-    transform: scaleX(1);
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    transform: translateY(-3px) scale(1.02);
+  }
+}
+
+@keyframes plant-stage-pop {
+  0% {
+    transform: scale(0.7);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes leaf-float {
+  0% {
+    transform: translateY(0) rotate(-4deg);
+  }
+  100% {
+    transform: translateY(-5px) rotate(4deg);
+  }
+}
+
+@keyframes leaf-beacon {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(0.85);
+    opacity: 0.4;
   }
   50% {
-    transform: scaleX(-1);
+    transform: translate(-50%, -50%) scale(1.25);
+    opacity: 0.85;
   }
 }
-@keyframes capy-bob {
-  0%,
+
+@keyframes leaf-eaten {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0.8;
+  }
   100% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+  }
+}
+
+.leaf-eating-burst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.leaf-eating-burst .nibble {
+  position: absolute;
+  color: #8fa776;
+  font-size: 13px;
+  animation: nibble-scatter 0.8s ease-out infinite;
+}
+
+.leaf-eating-burst .n1 {
+  top: -12px;
+  left: -8px;
+  animation-delay: 0.1s;
+}
+
+.leaf-eating-burst .n2 {
+  top: 4px;
+  left: 10px;
+  animation-delay: 0.3s;
+}
+
+.leaf-eating-burst .n3 {
+  top: -6px;
+  left: 12px;
+  animation-delay: 0.5s;
+}
+
+@keyframes nibble-scatter {
+  0% {
+    opacity: 1;
+    transform: scale(0.8) translate(0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.4) translate(var(--mx, 8px), var(--my, -12px));
+  }
+}
+
+/* ==========================================================================
+   Universal Capy Character & Particle Engine
+   ========================================================================== */
+
+.capy-character-root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: auto;
+}
+
+.capy-facing-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  transform-origin: center center;
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.capy-sprite-wrapper {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  transform-origin: center bottom;
+  animation: capy-breathe 4.5s ease-in-out infinite;
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.capy-sprite-wrapper.is-walking {
+  animation: capy-waddle 0.55s ease-in-out infinite alternate;
+}
+
+.interactive-companion.is-getting-up .capy-sprite-wrapper {
+  animation: capy-get-up 0.48s cubic-bezier(0.2, 0.8, 0.25, 1.2) forwards !important;
+}
+
+.companion-wander-btn.is-getting-up {
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.pose-drag .capy-sprite-wrapper {
+  animation: capy-dangle 1.2s ease-in-out infinite alternate;
+}
+.pose-pet .capy-sprite-wrapper {
+  animation: capy-bounce-pet 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.pose-sleep .capy-sprite-wrapper {
+  animation: capy-sleep-breathe 4.8s ease-in-out infinite;
+}
+.pose-snack .capy-sprite-wrapper {
+  animation: capy-chew 0.4s ease-in-out infinite;
+}
+
+.capy-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 10px rgba(35, 45, 30, 0.12));
+}
+
+.capy-shadow {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 72%;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(35, 45, 30, 0.3) 0%, rgba(35, 45, 30, 0.08) 60%, transparent 80%);
+  z-index: 1;
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.capy-shadow.is-lifted {
+  opacity: 0.16;
+  transform: translateX(-50%) translateY(20px) scale(0.65);
+}
+
+/* Pop-up Clover Sprout */
+.capy-pop-sprout {
+  position: absolute;
+  bottom: 6px;
+  right: -10px;
+  width: 42px;
+  height: 56px;
+  z-index: 4;
+  pointer-events: none;
+  animation: sprout-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.3) forwards;
+}
+.sprout-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.15));
+}
+@keyframes sprout-pop {
+  0% {
+    transform: scale(0) translateY(20px);
+    opacity: 0;
+  }
+  65% {
+    transform: scale(1.2) translateY(-4px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Floating Hearts */
+.capy-effects-layer.hearts {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90px;
+  height: 50px;
+  pointer-events: none;
+  z-index: 10;
+}
+.capy-effects-layer.hearts .heart {
+  position: absolute;
+  color: #ff5b79;
+  font-size: 16px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 5px rgba(255, 91, 121, 0.4));
+  animation: heart-rise 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.capy-effects-layer.hearts .h1 {
+  left: 15%;
+  animation-delay: 0s;
+  font-size: 14px;
+}
+.capy-effects-layer.hearts .h2 {
+  left: 46%;
+  animation-delay: 0.25s;
+  font-size: 20px;
+}
+.capy-effects-layer.hearts .h3 {
+  left: 78%;
+  animation-delay: 0.5s;
+  font-size: 16px;
+}
+@keyframes heart-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.6);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-40px) scale(0.9);
+  }
+}
+
+/* Floating Zzz */
+.capy-effects-layer.zzz {
+  position: absolute;
+  top: -12px;
+  right: 6px;
+  width: 60px;
+  height: 50px;
+  pointer-events: none;
+  z-index: 10;
+}
+.capy-effects-layer.zzz .z-item {
+  position: absolute;
+  color: #69826d;
+  font-weight: 800;
+  font-family: monospace;
+  animation: zzz-rise 3.2s ease-in-out infinite;
+}
+.capy-effects-layer.zzz .z1 {
+  left: 10px;
+  font-size: 12px;
+  animation-delay: 0s;
+}
+.capy-effects-layer.zzz .z2 {
+  left: 24px;
+  font-size: 15px;
+  animation-delay: 1s;
+}
+.capy-effects-layer.zzz .z3 {
+  left: 40px;
+  font-size: 19px;
+  animation-delay: 2s;
+}
+@keyframes zzz-rise {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.6);
+  }
+  35% {
+    opacity: 0.9;
+    transform: translate(6px, -12px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(16px, -34px) scale(1.2);
+  }
+}
+
+/* Snack Crumbs */
+.capy-snack-crumbs {
+  position: absolute;
+  right: 18px;
+  top: 48%;
+  pointer-events: none;
+  z-index: 5;
+}
+.capy-snack-crumbs .crumb {
+  position: absolute;
+  color: #bfa14e;
+  font-size: 12px;
+  animation: crumb-fall 0.8s ease-out infinite;
+}
+.capy-snack-crumbs .c1 {
+  left: -4px;
+  animation-delay: 0.1s;
+}
+.capy-snack-crumbs .c2 {
+  left: 6px;
+  animation-delay: 0.3s;
+  font-size: 10px;
+}
+.capy-snack-crumbs .c3 {
+  left: 14px;
+  animation-delay: 0.5s;
+}
+@keyframes crumb-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* Micro-Animations */
+@keyframes capy-breathe {
+  0%, 100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.02, 0.985);
+  }
+}
+@keyframes capy-waddle {
+  0% {
+    transform: rotate(-3.5deg) translateY(0);
+  }
+  100% {
+    transform: rotate(3.5deg) translateY(-3px);
+  }
+}
+@keyframes capy-dangle {
+  0% {
+    transform: rotate(-4deg);
+  }
+  100% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes capy-bounce-pet {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.14, 0.92) translateY(-6px);
+  }
+  70% {
+    transform: scale(0.96, 1.05) translateY(0);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes capy-sleep-breathe {
+  0%, 100% {
+    transform: scale(1, 1);
+  }
+  50% {
+    transform: scale(1.025, 1.035) translateY(-1px);
+  }
+}
+@keyframes capy-chew {
+  0%, 100% {
+    transform: scale(1, 1);
+  }
+  50% {
+    transform: scale(1.03, 0.97);
+  }
+}
+
+@keyframes capy-get-up {
+  0% {
+    transform: translateY(0) scale(1, 1);
+  }
+  28% {
+    transform: translateY(-16px) scale(0.92, 1.15);
+  }
+  55% {
+    transform: translateY(-3px) scale(1.1, 0.94);
+  }
+  80% {
+    transform: translateY(-8px) scale(1.02, 1.02);
+  }
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+}
+
+/* Landing squash/stretch */
+.interactive-companion.landing-bounce .capy-sprite-wrapper {
+  animation: capy-land-bounce 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes capy-land-bounce {
+  0% {
+    transform: scale(1.16, 0.82) translateY(4px);
+  }
+  50% {
+    transform: scale(0.94, 1.08) translateY(-6px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ==========================================================================
+   Draggable Screen Companion Container
+   ========================================================================== */
+
+.interactive-companion {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.interactive-companion.is-screen-floating {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  will-change: transform;
+  filter: drop-shadow(0 8px 24px rgba(25, 45, 30, 0.18));
+}
+
+.interactive-companion:active {
+  cursor: grabbing;
+}
+
+/* Floating Multi-Option Menu in Higher Position */
+.capy-floating-controls-wrapper {
+  position: absolute;
+  top: -42px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 60;
+  pointer-events: auto;
+  animation: capy-menu-pop 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.capy-multi-menu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 10px;
+  background: rgba(22, 38, 29, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(145, 185, 140, 0.4);
+  border-radius: 9999px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.capy-menu-btn {
+  background: transparent;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.capy-menu-btn:hover {
+  transform: scale(1.22);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.capy-menu-btn.is-active {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.capy-menu-btn .menu-emoji {
+  font-size: 14px;
+  line-height: 1;
+  user-select: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+.capy-menu-tail {
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid rgba(22, 38, 29, 0.92);
+  pointer-events: none;
+}
+
+.capy-dock-shortcut-btn {
+  background: rgba(22, 38, 29, 0.92);
+  border: 1px solid rgba(145, 185, 140, 0.4);
+  border-radius: 50%;
+  padding: 6px;
+  color: #a9c6ab;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  transition: all 0.15s ease;
+}
+
+.capy-dock-shortcut-btn:hover {
+  background: rgba(45, 75, 55, 0.95);
+  color: #ffffff;
+  transform: scale(1.12);
+}
+
+/* Floating Emote Speech Bubble in Higher Position */
+.capy-floating-emote-wrapper {
+  position: absolute;
+  top: -46px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 55;
+  pointer-events: none;
+}
+
+.capy-emote-bubble {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(20, 36, 26, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(145, 185, 140, 0.45);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: emote-bubble-pop 0.26s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.capy-emote-bubble .emote-bubble-content {
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.capy-emote-bubble .emote-bubble-tail {
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid rgba(20, 36, 26, 0.92);
+}
+
+.emote-icon {
+  display: inline-block;
+  line-height: 1;
+}
+
+.emote-excited .emote-icon {
+  animation: excited-bounce 0.38s ease-in-out infinite alternate;
+}
+
+.emote-happy .emote-icon {
+  animation: heart-pulse 0.55s ease-in-out infinite alternate;
+}
+
+.emote-curious .emote-icon {
+  animation: sparkle-spin 1.4s ease-in-out infinite;
+}
+
+.emote-eating .emote-icon {
+  animation: chew-bob 0.32s ease-in-out infinite;
+}
+
+@keyframes capy-menu-pop {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px) scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes emote-bubble-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes excited-bounce {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    transform: translateY(-3px) scale(1.18);
+  }
+}
+
+@keyframes heart-pulse {
+  0% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1.15);
+  }
+}
+
+@keyframes sparkle-spin {
+  0% {
+    transform: rotate(0deg) scale(0.95);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.15);
+  }
+  100% {
+    transform: rotate(360deg) scale(0.95);
+  }
+}
+
+@keyframes chew-bob {
+  0%, 100% {
     transform: translateY(0);
   }
   50% {
     transform: translateY(-2px);
   }
 }
-@keyframes capy-step {
-  from {
-    transform: rotate(-12deg);
-  }
-  to {
-    transform: rotate(12deg);
-  }
+
+.docked-companion-stage {
+  height: 88px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
 }
-@media (max-width: 650px) {
-  .capy-companion {
-    padding: 0 20px;
-  }
+
+.docked-actions {
+  margin-top: 4px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 28px;
 }
-@media (prefers-reduced-motion: reduce) {
-  .capy-wander,
-  .capy-facing,
-  .capy-body,
-  .capy-foot {
-    animation: none;
-  }
-  .capy-rest {
-    display: none;
-  }
+.companion-wander-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--green-dark);
+  background: var(--sage);
+  border: 1px solid transparent;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
-.companion-greet {
-  display: block;
+.companion-wander-btn:hover {
+  background: var(--line);
+  transform: translateY(-1px);
+}
+
+.interactive-companion.is-docked {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   padding: 0;
-  margin: 0 auto;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  border-radius: 14px;
+  margin: 0;
 }
-.companion-greet:hover {
-  background: transparent;
+
+/* Docked empty cushion when Capy is wandering */
+.docked-companion-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  text-align: center;
+  width: 100%;
 }
-.companion-wrap,
-.companion-hop,
-.sidebar-companion .companion {
-  display: block;
+.empty-cushion {
+  width: 68px;
+  height: 44px;
+  border-radius: 22px;
+  background: rgba(66, 98, 71, 0.08);
+  border: 1.5px dashed var(--line);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 2px;
+  margin: 0 auto 4px;
+  position: relative;
+  transition: all 0.3s ease;
 }
-.sidebar-companion .companion {
-  transform-origin: 50% 90%;
-  animation: companion-breathe 4.5s ease-in-out infinite;
+.empty-cushion.has-ready-plant {
+  background: rgba(106, 176, 76, 0.15);
+  border-color: rgba(106, 176, 76, 0.6);
+  box-shadow: 0 0 16px rgba(106, 176, 76, 0.25);
 }
-.sidebar-companion .companion.study {
-  animation: companion-read 5.5s ease-in-out infinite;
+.cushion-icon {
+  font-size: 20px;
+  opacity: 0.7;
 }
-.sidebar-companion .companion.rest {
-  animation: companion-snooze 6s ease-in-out infinite;
+
+/* Cushion Seed and Plant Lifecycle */
+.cushion-seed-wrapper {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 58px;
+  height: 46px;
+  pointer-events: none;
 }
-.sidebar-companion .companion.celebrate {
-  animation: companion-cheer 3.5s ease-in-out infinite;
+
+/* Stage: Falling seed (dropped after Cappy dragged out) */
+.cushion-seed-wrapper.stage-falling {
+  animation: seed-fall 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards;
 }
-.companion-hop {
-  animation: companion-hello 0.65s ease-out;
+
+/* Stage: Planted resting seed on cushion */
+.cushion-seed-wrapper.stage-planted {
+  animation: seed-breathe 2.5s ease-in-out infinite;
 }
-.sidebar-companion.is-resting .companion {
-  animation-play-state: paused;
+
+/* Stage: Sprouting shoot emerging from seed */
+.cushion-seed-wrapper.stage-sprouting .cushion-seed-art {
+  animation: plant-stage-pop 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
 }
-.companion-rest {
-  display: block;
-  margin: 0 auto;
-  padding: 4px 10px;
-  font-size: 11px;
-  color: #456044;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
+
+/* Stage: Full tree ready with beacon */
+.cushion-seed-wrapper.stage-ready {
+  animation: plant-ready-bob 1.8s ease-in-out infinite;
 }
-@keyframes companion-breathe {
-  0%,
+
+/* Stage: Being eaten by Cappy upon arrival */
+.cushion-seed-wrapper.stage-being_eaten {
+  animation: plant-eaten 0.8s ease-out forwards;
+}
+
+.cushion-seed-art {
+  max-width: 54px;
+  max-height: 44px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(25, 45, 30, 0.22));
+  transition: transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28), opacity 0.2s ease;
+}
+
+.cushion-seed-art.stage-img-1 {
+  max-height: 18px;
+}
+.cushion-seed-art.stage-img-2 {
+  max-height: 24px;
+}
+.cushion-seed-art.stage-img-3 {
+  max-height: 28px;
+}
+.cushion-seed-art.stage-img-4 {
+  max-height: 32px;
+}
+.cushion-seed-art.stage-img-5 {
+  max-height: 36px;
+}
+.cushion-seed-art.stage-img-6,
+.cushion-seed-art.stage-img-7,
+.cushion-seed-art.stage-img-8,
+.cushion-seed-art.stage-img-9,
+.cushion-seed-art.stage-img-10 {
+  max-height: 44px;
+}
+
+/* Shimmering beacon ring summoning Cappy home */
+.cushion-beacon-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 999px;
+  border: 2px solid rgba(106, 176, 76, 0.65);
+  box-shadow: 0 0 10px rgba(106, 176, 76, 0.4);
+  animation: cushion-beacon-pulse 1.3s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes cushion-beacon-pulse {
+  0% {
+    transform: scale(0.65);
+    opacity: 0.95;
+  }
   100% {
-    transform: translateY(0) rotate(-1deg) scaleY(1);
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+/* Munch / snack crumb burst particles */
+.cushion-eating-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cushion-nibble {
+  position: absolute;
+  font-size: 13px;
+  color: #4f8a32;
+  font-weight: bold;
+  animation: cushion-crumb-float 0.75s ease-out forwards;
+}
+.cushion-nibble.n1 {
+  animation-delay: 0s;
+  --dx: -12px;
+}
+.cushion-nibble.n2 {
+  animation-delay: 0.12s;
+  --dx: 14px;
+}
+.cushion-nibble.n3 {
+  animation-delay: 0.24s;
+  --dx: -2px;
+}
+
+@keyframes cushion-crumb-float {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(0.6);
   }
   50% {
-    transform: translateY(-3px) rotate(1deg) scaleY(1.035);
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 8px), -16px) scale(1.1);
   }
 }
-@keyframes companion-hello {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  35% {
-    transform: translateY(-12px) rotate(-5deg);
+
+@keyframes seed-fall {
+  0% {
+    transform: translateY(-38px) scale(0.6) rotate(-15deg);
+    opacity: 0;
   }
   65% {
-    transform: translateY(0) scaleY(0.96);
+    transform: translateY(2px) scale(1.08, 0.92) rotate(4deg);
+    opacity: 1;
   }
-  80% {
-    transform: translateY(-3px);
+  85% {
+    transform: translateY(-3px) scale(0.98, 1.02) rotate(-2deg);
+  }
+  100% {
+    transform: translateY(0) scale(1) rotate(0deg);
+    opacity: 1;
   }
 }
-@keyframes companion-read {
-  0%,
-  100% {
-    transform: rotate(0) translateY(0);
-  }
-  25%,
-  65% {
-    transform: rotate(2deg) translateY(2px);
-  }
-  45%,
-  80% {
-    transform: rotate(-1deg) translateY(-1px);
-  }
-}
-@keyframes companion-snooze {
-  0%,
-  100% {
-    transform: scale(1, 1) rotate(-2deg);
+
+@keyframes seed-breathe {
+  0%, 100% {
+    transform: scale(1) translateY(0);
   }
   50% {
-    transform: scale(1.025, 1.045) rotate(-1deg) translateY(-1px);
+    transform: scale(1.04) translateY(-1px);
   }
 }
-@keyframes companion-cheer {
-  0%,
-  55%,
+
+@keyframes sprout-grow {
+  0% {
+    transform: scale(0.35) translateY(4px);
+    opacity: 0.5;
+  }
   100% {
-    transform: translateY(0) rotate(0);
-  }
-  12% {
-    transform: translateY(-9px) rotate(-5deg);
-  }
-  24% {
-    transform: translateY(0) scaleY(0.96);
-  }
-  36% {
-    transform: translateY(-6px) rotate(5deg);
-  }
-  48% {
-    transform: translateY(0) scaleY(0.98);
+    transform: scale(1) translateY(0);
+    opacity: 1;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .companion-rest {
-    display: none;
+
+@keyframes plant-ready-bob {
+  0%, 100% {
+    transform: translateY(0) scale(1);
   }
+  50% {
+    transform: translateY(-2px) scale(1.05);
+  }
+}
+
+@keyframes plant-eaten {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(0.55) rotate(8deg);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(0) rotate(-14deg);
+    opacity: 0;
+  }
+}
+
+.empty-text {
+  margin: 0 0 4px;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.dock-call-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--green-dark);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+}
+.dock-call-btn:hover:not(:disabled) {
+  background: var(--sage);
+  transform: translateY(-1px);
+}
+.dock-call-btn:disabled {
+  opacity: 0.75;
+  cursor: default;
+  background: var(--surface);
+}
+
+.docked-companion-empty.is-lifted {
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+.docked-companion-empty.is-lifted .empty-cushion {
+  border-color: var(--green-dark);
+  background: rgba(66, 98, 71, 0.14);
+}
+
+.interactive-companion.mode-dragged {
+  cursor: grabbing !important;
 }
 
 /* ==========================================================================
@@ -2569,10 +3581,10 @@ body.is-desktop a {
   user-drag: none;
 }
 
-/* Seamless Desktop Titlebar (36px high continuous strip) */
+/* Seamless Desktop Titlebar (35px high continuous strip) */
 .desktop-titlebar {
   display: none;
-  height: 36px;
+  height: 35px;
   width: 100%;
   position: fixed;
   top: 0;
@@ -2583,13 +3595,30 @@ body.is-desktop a {
   -webkit-user-select: none;
   box-sizing: border-box;
   background: var(--cream);
-  border-bottom: 1px solid var(--line);
   align-items: center;
   padding: 0 16px;
 }
 
+/* 1px full-width continuous border line directly under window controls */
+.desktop-titlebar-line {
+  display: none;
+  position: fixed;
+  top: 35px;
+  left: 0;
+  right: 0;
+  width: 100vw;
+  height: 1px;
+  background: var(--line);
+  z-index: 10001;
+  pointer-events: none;
+}
+
 body.is-desktop .desktop-titlebar {
   display: flex;
+}
+
+body.is-desktop .desktop-titlebar-line {
+  display: block;
 }
 
 .titlebar-brand {
@@ -2690,17 +3719,24 @@ body.is-desktop .sidebar .grow-card {
   -webkit-app-region: no-drag;
 }
 
-/* Fullscreen mode: titlebar hidden */
-body.is-desktop.is-fullscreen .desktop-titlebar {
-  display: none;
+/* Fullscreen mode: titlebar hidden, sidebar & content fill display */
+body.is-fullscreen .desktop-titlebar,
+body.is-fullscreen .desktop-titlebar-line,
+body.is-desktop.is-fullscreen .desktop-titlebar,
+body.is-desktop.is-fullscreen .desktop-titlebar-line {
+  display: none !important;
 }
 
+body.is-fullscreen .sidebar,
 body.is-desktop.is-fullscreen .sidebar {
-  top: 0;
-  height: 100vh;
+  top: 0 !important;
+  height: 100vh !important;
+  height: 100dvh !important;
 }
 
+body.is-fullscreen .app-body,
 body.is-desktop.is-fullscreen .app-body {
-  margin-top: 0;
+  margin-top: 0 !important;
 }
+
 

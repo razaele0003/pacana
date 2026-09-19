@@ -1,9 +1,10 @@
 "use client";
 /* Native links intentionally load cached HTML for offline navigation. Artwork is locally optimized WebP. */
 /* eslint-disable @next/next/no-html-link-for-pages, @next/next/no-img-element */
-import { useEffect, useRef, useState } from "react";
-import FullscreenTimer from "./fullscreen-timer";
+import { useEffect, useRef, useState, useCallback } from "react";
 import SidebarCompanion from "./sidebar-companion";
+import InteractiveCompanion from "./interactive-companion";
+import FullscreenTimer from "./fullscreen-timer";
 import { LogPhoto } from "./log-photo";
 import {
   Leaf,
@@ -25,7 +26,9 @@ import {
   Sprout,
   Bell,
   ChevronRight,
+  ChevronDown,
   Maximize2,
+  Minimize2,
   Music,
   Trash2,
   Plus,
@@ -158,7 +161,116 @@ export default function Pacana() {
       null,
     );
   const [date, setDate] = useState(""),
-    [online, setOnline] = useState(true);
+    [online, setOnline] = useState(true),
+    [isCompanionFloating, setIsCompanionFloating] = useState(false),
+    [companionDropPos, setCompanionDropPos] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsCompanionFloating(
+        localStorage.getItem("pacana:companion:floating") === "true",
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleSwitchTab = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      if (customEvent.detail) {
+        setTab(customEvent.detail);
+        setNotice("");
+      }
+    };
+    window.addEventListener("pacana:switch-tab", handleSwitchTab);
+    return () => {
+      window.removeEventListener("pacana:switch-tab", handleSwitchTab);
+    };
+  }, []);
+
+  const handleToggleCompanion = (floating: boolean, dropPos?: { x: number; y: number }) => {
+    if (dropPos) {
+      setCompanionDropPos(dropPos);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("pacana:companion:pos", JSON.stringify(dropPos));
+      }
+    }
+    setIsCompanionFloating(floating);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("pacana:companion:floating", floating ? "true" : "false");
+    }
+  };
+
+  const toggleFullscreen = useCallback(
+    (desired?: boolean) => {
+      const isElectron =
+        typeof window !== "undefined" &&
+        Boolean((window as any).pacanaDesktop?.setFullscreen);
+
+      if (isElectron) {
+        const next = typeof desired === "boolean" ? desired : !fullscreen;
+        void (window as any).pacanaDesktop
+          .setFullscreen(next)
+          .then((res: boolean) => {
+            setFullscreen(res);
+          })
+          .catch(() => {});
+      } else if (typeof document !== "undefined") {
+        const isWebFull = Boolean(document.fullscreenElement);
+        const next = typeof desired === "boolean" ? desired : !isWebFull;
+        if (next) {
+          if (
+            document.documentElement.requestFullscreen &&
+            !document.fullscreenElement
+          ) {
+            document.documentElement.requestFullscreen().catch(() => {});
+          }
+        } else {
+          if (document.exitFullscreen && document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+          }
+        }
+      }
+    },
+    [fullscreen],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if ((window as any).pacanaDesktop?.onFullscreenChange) {
+      if (typeof (window as any).pacanaDesktop.isFullscreen === "function") {
+        (window as any).pacanaDesktop
+          .isFullscreen()
+          .then((isFull: boolean) => {
+            setFullscreen(isFull);
+          })
+          .catch(() => {});
+      }
+      const cleanup = (window as any).pacanaDesktop.onFullscreenChange(
+        (isFull: boolean) => {
+          setFullscreen(isFull);
+        },
+      );
+      return cleanup;
+    }
+
+    const handleFsChange = () => {
+      setFullscreen(Boolean(document.fullscreenElement));
+    };
+    setFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", handleFsChange);
+    return () =>
+      document.removeEventListener("fullscreenchange", handleFsChange);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (fullscreen) {
+      document.body.classList.add("is-fullscreen");
+    } else {
+      document.body.classList.remove("is-fullscreen");
+    }
+  }, [fullscreen]);
   const lastTick = useRef(0),
     busy = useRef(false);
   const time = (ts: number) =>
@@ -297,7 +409,7 @@ export default function Pacana() {
           }
         });
       }
-      // F key -> Toggle scoreboard fullscreen
+      // F key -> Toggle fullscreen
       else if (
         (e.key === "f" || e.key === "F") &&
         !isInput &&
@@ -309,13 +421,18 @@ export default function Pacana() {
         !e.altKey
       ) {
         e.preventDefault();
-        setFullscreen((prev) => !prev);
+        toggleFullscreen();
+      }
+      // Escape -> Exit fullscreen if active
+      else if (e.key === "Escape" && fullscreen) {
+        e.preventDefault();
+        toggleFullscreen(false);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editing, manualJournal, setup, task, category]);
+  }, [editing, manualJournal, setup, task, category, toggleFullscreen, fullscreen]);
   if (!state)
     return (
       <main className="loading">
@@ -374,7 +491,7 @@ export default function Pacana() {
   }).format(now);
   return (
     <div className="app-shell">
-      <div className="desktop-titlebar" aria-hidden="true">
+      <div className="desktop-titlebar" aria-hidden="true" data-capybara-obstacle>
         <div className="titlebar-brand">
           <span className="titlebar-icon">
             <Leaf size={12} strokeWidth={2.6} />
@@ -383,7 +500,8 @@ export default function Pacana() {
         </div>
         <div className="titlebar-drag-region" />
       </div>
-      <aside className="sidebar">
+      <div className="desktop-titlebar-line" aria-hidden="true" />
+      <aside className="sidebar" data-capybara-obstacle>
         <a
           className="brand"
           href="/"
@@ -407,6 +525,8 @@ export default function Pacana() {
           {tabs.map(([name, Icon]) => (
             <button
               key={name}
+              data-tab={name}
+              data-capybara-target={name === "Focus" ? "nav-focus" : undefined}
               className={tab === name ? "nav-item active" : "nav-item"}
               onClick={() => choose(name)}
               aria-current={tab === name ? "page" : undefined}
@@ -441,7 +561,7 @@ export default function Pacana() {
         </div>
       </aside>
       <div className="app-body">
-        <header className="topbar">
+        <header className="topbar" data-capybara-obstacle>
           <div className="header-greeting">
             <span className="greeting-leaf">
               <Leaf size={16} />
@@ -558,7 +678,7 @@ export default function Pacana() {
           {tab === "Focus" && (
             <div className="focus-layout">
               <section className="focus-main">
-                <div className="timer-card">
+                <div className="timer-card" data-capybara-obstacle>
                   <div className="timer-tabs">
                     {(["focus", "short", "long"] as Phase[]).map((p) => (
                       <button
@@ -589,8 +709,8 @@ export default function Pacana() {
                     </button>
                     <button
                       aria-label="Open fullscreen timer"
-                      title="Fullscreen timer"
-                      onClick={() => setFullscreen(true)}
+                      title="Fullscreen timer (F)"
+                      onClick={() => toggleFullscreen(true)}
                     >
                       <Maximize2 size={18} />
                     </button>
@@ -626,6 +746,7 @@ export default function Pacana() {
                         {!timer ? (
                           <button
                             className="primary"
+                            data-capybara-target="focus"
                             onClick={() =>
                               void update((s) =>
                                 startPhase(
@@ -644,6 +765,7 @@ export default function Pacana() {
                           <>
                             <button
                               className="primary"
+                              data-capybara-target="focus"
                               onClick={() =>
                                 void update((s) => pause(s, Date.now()))
                               }
@@ -664,6 +786,7 @@ export default function Pacana() {
                           <>
                             <button
                               className="primary"
+                              data-capybara-target="focus"
                               onClick={() =>
                                 void update((s) => resume(s, Date.now()))
                               }
@@ -683,6 +806,7 @@ export default function Pacana() {
                         ) : (
                           <button
                             className="primary"
+                            data-capybara-target="focus"
                             onClick={() =>
                               void update((s) =>
                                 startPhase(
@@ -767,7 +891,7 @@ export default function Pacana() {
                     </div>
                   </div>
                 )}
-                <div className="task-card card">
+                <div className="task-card card" data-capybara-obstacle>
                   <span className="soft-icon">
                     <BookOpen size={21} />
                   </span>
@@ -783,16 +907,26 @@ export default function Pacana() {
                       disabled={!!timer && timer.status !== "complete"}
                     />
                   </label>
-                  <select
-                    aria-label="Focus category"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    disabled={!!timer && timer.status !== "complete"}
-                  >
-                    {categories.map((c) => (
-                      <option key={c}>{c}</option>
-                    ))}
-                  </select>
+                  <div className="task-category-wrapper">
+                    <select
+                      className="task-category-select"
+                      aria-label="Focus category"
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      disabled={!!timer && timer.status !== "complete"}
+                    >
+                      {categories.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      size={14}
+                      className="task-category-chevron"
+                      aria-hidden="true"
+                    />
+                  </div>
                 </div>
                 <div className="mini-stats">
                   <div className="card">
@@ -825,7 +959,7 @@ export default function Pacana() {
                   “You don’t have to do it all. Just the next little thing.”
                 </p>
               </section>
-              <aside className="rhythm card">
+              <aside className="rhythm card" data-capybara-obstacle>
                 <div className="section-title">
                   <h2>Today’s rhythm</h2>
                   <span className="soft-icon">
@@ -895,6 +1029,8 @@ export default function Pacana() {
                             ? "study"
                             : "idle"
                     }
+                    isFloating={isCompanionFloating}
+                    onToggleFloating={handleToggleCompanion}
                   />
                   <p>
                     A moment to notice.
@@ -1109,6 +1245,8 @@ export default function Pacana() {
         {tabs.map(([name, Icon]) => (
           <button
             key={name}
+            data-tab={name}
+            data-capybara-target={name === "Focus" ? "nav-focus-mobile" : undefined}
             className={tab === name ? "active" : ""}
             onClick={() => choose(name)}
           >
@@ -1117,12 +1255,29 @@ export default function Pacana() {
           </button>
         ))}
       </nav>
+      {isCompanionFloating && !fullscreen && (
+        <InteractiveCompanion
+          isFloating={true}
+          isFullScreen={false}
+          onToggleFloating={handleToggleCompanion}
+          initialPos={companionDropPos || undefined}
+          externalPose={
+            timer?.status === "complete"
+              ? "celebrate"
+              : phase !== "focus"
+                ? "rest"
+                : timer?.status === "running"
+                  ? "study"
+                  : "idle"
+          }
+        />
+      )}
       {fullscreen && (
         <FullscreenTimer
           state={state}
           now={now}
           error={error}
-          close={() => setFullscreen(false)}
+          close={() => toggleFullscreen(false)}
           stop={() => void update((s) => end(s, Date.now()))}
           primary={() =>
             void update((s) => {
@@ -1928,9 +2083,10 @@ function Preferences({
             onClick={async () => {
               try {
                 await previewRingtone(state.settings);
-              } catch {
+              } catch (err) {
                 setError(
-                  "Sound could not play. Check your browser audio permissions and device volume.",
+                  (err as Error)?.message ||
+                    "Sound could not play. Check your browser audio permissions and device volume.",
                 );
               }
             }}
@@ -1951,7 +2107,24 @@ function Preferences({
                     file.size > 5 * 1024 * 1024
                   )
                     throw new Error("Choose an audio file under 5 MB.");
-                  const customRingtone = await readAsDataUrl(file);
+
+                  let customRingtone: string;
+                  if (
+                    typeof window !== "undefined" &&
+                    (window as any).pacanaDesktop?.saveAudio
+                  ) {
+                    const buffer = await file.arrayBuffer();
+                    const saved = await (window as any).pacanaDesktop.saveAudio(
+                      file.name,
+                      buffer,
+                      file.type,
+                    );
+                    customRingtone =
+                      typeof saved === "string" ? saved : saved?.url || "";
+                  } else {
+                    customRingtone = await readAsDataUrl(file);
+                  }
+
                   if (
                     await update((s) => {
                       s.settings.ringtone = "custom";
@@ -1979,12 +2152,24 @@ function Preferences({
           {state.settings.customRingtone && (
             <button
               className="text-link"
-              onClick={() =>
+              onClick={async () => {
+                const oldUrl = state.settings.customRingtone;
+                if (
+                  oldUrl &&
+                  oldUrl.startsWith("pacana://app/audio/") &&
+                  typeof window !== "undefined" &&
+                  (window as any).pacanaDesktop?.deleteAudio
+                ) {
+                  const id = oldUrl.replace("pacana://app/audio/", "");
+                  await (window as any).pacanaDesktop
+                    .deleteAudio(id)
+                    .catch(() => {});
+                }
                 void update((s) => {
                   delete s.settings.customRingtone;
                   s.settings.ringtone = "classic";
-                })
-              }
+                });
+              }}
             >
               Remove uploaded ringtone
             </button>

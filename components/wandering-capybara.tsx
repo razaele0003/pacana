@@ -1,91 +1,175 @@
 "use client";
-import { useState } from "react";
-/** A small vector sprite: separate feet let the companion actually walk. */
+import React, { useRef, useState } from "react";
+import CapySprite from "./capy-sprite";
+import CapyLeaf from "./capy-leaf";
+import CapyEmoteBubble from "./capy-emote-bubble";
+import CapyMenu from "./capy-menu";
+import { useAutonomousCapy } from "../lib/capy-npc/autonomous-controller";
+
 export default function WanderingCapybara() {
-  const [resting, setResting] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [menuSuppressed, setMenuSuppressed] = useState(false);
+
+  // Instantly dismiss menu on any interaction so Cappy's head & emote are clear
+  const handleMenuAction = (action: () => void) => {
+    setIsHovered(false);
+    setMenuSuppressed(true);
+    action();
+  };
+
+  const dragRef = useRef({
+    isDown: false,
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    initPosX: 0,
+    initPosY: 0,
+  });
+
+  const npc = useAutonomousCapy({
+    enabled: true,
+    initialPos: {
+      x: typeof window !== "undefined" ? window.innerWidth * 0.5 : 500,
+      y: typeof window !== "undefined" ? window.innerHeight - 150 : 500,
+    },
+    walkSpeed: 48,
+    isFullScreen: true,
+  });
+
+  // Pointer drag events
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+
+    dragRef.current = {
+      isDown: true,
+      isDragging: false,
+      startX: e.clientX,
+      startY: e.clientY,
+      initPosX: npc.pos.x,
+      initPosY: npc.pos.y,
+    };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragRef.current.isDown) return;
+
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+
+    if (!dragRef.current.isDragging && Math.hypot(dx, dy) > 6) {
+      dragRef.current.isDragging = true;
+      npc.startDrag({
+        x: dragRef.current.initPosX,
+        y: dragRef.current.initPosY,
+      });
+    }
+
+    if (dragRef.current.isDragging) {
+      npc.updateDrag({
+        x: dragRef.current.initPosX + dx,
+        y: dragRef.current.initPosY + dy,
+      });
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!dragRef.current.isDown) return;
+
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
+
+    const wasDragging = dragRef.current.isDragging;
+    dragRef.current.isDown = false;
+    dragRef.current.isDragging = false;
+
+    if (wasDragging) {
+      npc.endDrag(true);
+    } else {
+      if (npc.mode === "resting") {
+        npc.wakeUp();
+      } else {
+        npc.triggerPet();
+      }
+    }
+  };
+
   return (
-    <div className={`capy-companion ${resting ? "is-resting" : ""}`}>
-      <div className="capy-trail" aria-hidden="true">
-        <div className="capy-wander">
-          <div className="capy-facing">
-            <svg className="capy-sprite" viewBox="0 0 120 90" fill="none">
-              <ellipse
-                cx="58"
-                cy="81"
-                rx="43"
-                ry="5"
-                fill="#0d211b"
-                opacity=".25"
-              />
-              <g className="capy-foot capy-foot-back">
-                <path d="M28 60h15v17q-7 6-15 0Z" fill="#986a45" />
-                <path d="M72 60h14v17q-7 6-14 0Z" fill="#986a45" />
-              </g>
-              <g className="capy-body">
-                <path
-                  d="M15 53c0-21 14-29 34-29h24c21 0 30 14 29 31-1 14-13 19-37 19H39c-17 0-24-7-24-21Z"
-                  fill="#bc8b59"
-                  stroke="#775537"
-                  strokeWidth="2"
-                />
-                <path
-                  d="M62 31c-2-17 7-23 22-21 13 1 16 9 17 20l9 8c6 5 6 15 0 19-9 6-29 6-40-2"
-                  fill="#cfa16c"
-                  stroke="#775537"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-                <ellipse
-                  cx="73"
-                  cy="15"
-                  rx="7"
-                  ry="9"
-                  fill="#bc8b59"
-                  stroke="#775537"
-                  strokeWidth="2"
-                />
-                <ellipse cx="74" cy="16" rx="3" ry="4" fill="#e6b48c" />
-                <circle cx="94" cy="32" r="3" fill="#3c3026" />
-                <circle cx="95" cy="31" r=".8" fill="#fff8dc" />
-                <ellipse cx="109" cy="42" rx="3" ry="2" fill="#684b35" />
-                <path
-                  d="M103 50q-4 3-7 0"
-                  stroke="#775537"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-                <ellipse
-                  cx="89"
-                  cy="43"
-                  rx="5"
-                  ry="3"
-                  fill="#dc9e7d"
-                  opacity=".65"
-                />
-                <path
-                  d="M30 37q10-5 19-3"
-                  stroke="#d6ac78"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                />
-                <path d="M78 8q-5-10-12-5 3 8 12 5Z" fill="#9dad72" />
-              </g>
-              <g className="capy-foot capy-foot-front">
-                <path d="M39 62h15v16q-7 6-15 0Z" fill="#bc8b59" />
-                <path d="M82 61h14v17q-7 6-14 0Z" fill="#cfa16c" />
-              </g>
-            </svg>
-          </div>
-        </div>
-      </div>
-      <button
-        className="capy-rest"
-        type="button"
-        aria-pressed={resting}
-        onClick={() => setResting(!resting)}
+    <>
+      {/* Active Leaf on screen (if spawned) */}
+      {npc.activeLeaf && (
+        <CapyLeaf
+          leaf={npc.activeLeaf}
+          onLeafClick={() => {
+            if (npc.activeLeaf) {
+              npc.startApproachingReadyLeaf(npc.activeLeaf);
+            }
+          }}
+        />
+      )}
+
+      {/* Autonomous Wandering Cappy in Fullscreen View */}
+      <div
+        className={`fullscreen-autonomous-capy ${
+          npc.landingBounce ? "landing-bounce" : ""
+        } mode-${npc.mode}`}
+        style={{
+          transform: `translate3d(${npc.pos.x}px, ${npc.pos.y}px, 0)`,
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onMouseEnter={() => {
+          if (!npc.activeEmote) {
+            setMenuSuppressed(false);
+            setIsHovered(true);
+          }
+        }}
+        onMouseLeave={() => {
+          setIsHovered(false);
+          setMenuSuppressed(false);
+        }}
+        title="Click to interact / wake · Drag Cappy anywhere"
       >
-        {resting ? "Let capy wander" : "Let capy rest"}
-      </button>
-    </div>
+        {/* Floating Multi-Option Menu in Higher Position */}
+        {isHovered && !menuSuppressed && !dragRef.current.isDragging && !npc.activeEmote && (
+          <div
+            className="capy-floating-controls-wrapper"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <CapyMenu
+              isResting={npc.mode === "resting"}
+              onSelectEmote={(type) =>
+                handleMenuAction(() => npc.triggerEmote(type))
+              }
+              onToggleRest={() => handleMenuAction(() => npc.toggleSleep())}
+              onSpawnSnack={() => handleMenuAction(() => npc.spawnLeaf())}
+              onPressFocus={() => handleMenuAction(() => npc.startPressFocus())}
+            />
+          </div>
+        )}
+
+        {/* Temporary Emote Speech Bubble in Higher Position */}
+        {npc.activeEmote && !dragRef.current.isDragging && (
+          <div className="capy-floating-emote-wrapper">
+            <CapyEmoteBubble type={npc.activeEmote.type} />
+          </div>
+        )}
+
+        <CapySprite
+          pose={npc.pose}
+          facing={npc.facing}
+          showHearts={npc.showHearts}
+          size={76}
+          isFloating={true}
+          onFrame={npc.onFrame}
+          onAnimationComplete={npc.onAnimationComplete}
+        />
+      </div>
+    </>
   );
 }

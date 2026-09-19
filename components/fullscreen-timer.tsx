@@ -140,7 +140,7 @@ export default function FullscreenTimer({
       onCancel={close}
     >
       <div className="fullscreen-inner">
-        <header className="fullscreen-header">
+        <header className="fullscreen-header" data-capybara-obstacle>
           <span className="brand">
             <Leaf /> pacana
           </span>
@@ -155,7 +155,7 @@ export default function FullscreenTimer({
             </button>
           </div>
         </header>
-        <section className="fullscreen-center">
+        <section className="fullscreen-center" data-capybara-obstacle>
           <p className="eyebrow">
             <span className="status-dot" />
             {timer?.status === "complete"
@@ -197,7 +197,7 @@ export default function FullscreenTimer({
               : timer?.task || "A little focus goes a long way."}
           </p>
           <div className="fullscreen-actions">
-            <button className="primary" onClick={primary}>
+            <button className="primary" data-capybara-target="focus" onClick={primary}>
               {timer?.status === "running" ? (
                 <Pause size={20} />
               ) : (
@@ -218,7 +218,7 @@ export default function FullscreenTimer({
           )}
         </section>
         <WanderingCapybara />
-        <footer className="fullscreen-footer">
+        <footer className="fullscreen-footer" data-capybara-obstacle>
           <span>
             <Leaf size={15} /> Just you and this moment.
           </span>

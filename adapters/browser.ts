@@ -1,7 +1,7 @@
 import type { Settings } from "../core/model";
 import { ringtones } from "../core/ringtones";
 let audio: AudioContext | undefined;
-let playing: AudioScheduledSourceNode[] = [];
+let playing: (AudioScheduledSourceNode | HTMLAudioElement)[] = [];
 let customSource = "";
 let customBuffer: AudioBuffer | undefined;
 export async function unlockAudio(custom?: string) {
@@ -14,36 +14,76 @@ export async function unlockAudio(custom?: string) {
 async function loadCustom(source: string) {
   if (!audio) return;
   if (customSource === source && customBuffer) return customBuffer;
-  const response = await fetch(source);
-  customBuffer = await audio.decodeAudioData(await response.arrayBuffer());
-  customSource = source;
-  return customBuffer;
+  try {
+    const response = await fetch(source);
+    if (!response.ok && response.status !== 0 && response.status !== 200) {
+      throw new Error(`Could not fetch audio file (status: ${response.status})`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    customBuffer = await audio.decodeAudioData(arrayBuffer);
+    customSource = source;
+    return customBuffer;
+  } catch (err) {
+    console.warn("[Pacana Audio] WebAudio buffer decode failed:", err);
+    throw err;
+  }
 }
 async function playRingtone(settings: Settings) {
   audio ??= new AudioContext();
   if (audio.state !== "running") await audio.resume();
-  if (audio.state !== "running") throw new Error("Sound could not start.");
-  for (const oscillator of playing) {
+  if (audio.state !== "running") throw new Error("Audio context could not start.");
+  for (const item of playing) {
     try {
-      oscillator.stop();
+      if ("stop" in item) {
+        (item as AudioScheduledSourceNode).stop();
+      } else if ("pause" in item) {
+        (item as HTMLAudioElement).pause();
+        (item as HTMLAudioElement).currentTime = 0;
+      }
     } catch {}
   }
   playing = [];
   if (settings.ringtone === "custom") {
     if (!settings.customRingtone)
       throw new Error("Upload a custom ringtone first.");
-    const source = audio.createBufferSource();
-    const buffer = await loadCustom(settings.customRingtone);
-    if (!buffer) throw new Error("Could not prepare the custom ringtone.");
-    source.buffer = buffer;
-    source.connect(audio.destination);
-    source.onended = () => {
-      source.disconnect();
-      playing = playing.filter((x) => x !== source);
-    };
-    playing.push(source);
-    source.start();
-    return;
+
+    // 1. Primary: Web Audio API BufferSource
+    try {
+      const source = audio.createBufferSource();
+      const buffer = await loadCustom(settings.customRingtone);
+      if (buffer) {
+        source.buffer = buffer;
+        source.connect(audio.destination);
+        source.onended = () => {
+          source.disconnect();
+          playing = playing.filter((x) => x !== source);
+        };
+        playing.push(source);
+        source.start();
+        return;
+      }
+    } catch (webAudioErr) {
+      console.warn(
+        "[Pacana Audio] Web Audio API failed, falling back to HTMLAudioElement:",
+        webAudioErr,
+      );
+    }
+
+    // 2. Secondary Fallback: Standard HTML5 Audio Element
+    try {
+      const audioEl = new Audio(settings.customRingtone);
+      audioEl.onended = () => {
+        playing = playing.filter((x) => x !== audioEl);
+      };
+      playing.push(audioEl);
+      await audioEl.play();
+      return;
+    } catch (fallbackErr) {
+      console.error("[Pacana Audio] All playback methods failed:", fallbackErr);
+      throw new Error(
+        "Could not play audio. Please check device volume and audio format.",
+      );
+    }
   }
   const chosen =
     ringtones.find((r) => r.id === settings.ringtone) ?? ringtones[0];
