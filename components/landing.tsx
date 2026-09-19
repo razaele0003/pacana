@@ -10,6 +10,15 @@ import {
   Download,
 } from "lucide-react";
 export default function Landing() {
+  const isLocal =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1");
+
+  const downloadUrl = isLocal
+    ? "/download/windows"
+    : "https://github.com/razaele0003/pacana/releases/latest/download/Pacana-Setup.exe";
+
   return (
     <div className="landing">
       <header className="landing-nav">
@@ -22,9 +31,8 @@ export default function Landing() {
         <div className="nav-actions">
           <a
             className="nav-download"
-            href="https://github.com/razaele0003/pacana/releases"
-            target="_blank"
-            rel="noreferrer"
+            href={downloadUrl}
+            download="Pacana-Setup.exe"
           >
             <Download size={16} /> Windows App
           </a>
@@ -57,9 +65,8 @@ export default function Landing() {
                 Make room for focus <ArrowRight size={19} />
               </a>
               <a
-                href="https://github.com/razaele0003/pacana/releases"
-                target="_blank"
-                rel="noreferrer"
+                href={downloadUrl}
+                download="Pacana-Setup.exe"
                 className="secondary-button"
               >
                 <Download size={18} /> Download for Windows
@@ -120,9 +127,8 @@ export default function Landing() {
               Open Pacana <ArrowRight size={18} />
             </a>
             <a
-              href="https://github.com/razaele0003/pacana/releases"
-              target="_blank"
-              rel="noreferrer"
+              href={downloadUrl}
+              download="Pacana-Setup.exe"
               className="secondary-button"
             >
               <Download size={18} /> Download for Windows

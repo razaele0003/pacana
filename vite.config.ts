@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import vinext from "vinext";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
@@ -60,6 +62,31 @@ export default defineConfig(async () => {
     plugins: [
       vinext(),
       sites(),
+      {
+        name: "installer-downloader",
+        configureServer(server: any) {
+          server.middlewares.use(async (req: any, res: any, next: any) => {
+            if (req.url === "/download/windows" || req.url === "/download/windows/") {
+              const installerPath = path.resolve("desktop-output/installer/Pacana-Setup.exe");
+              try {
+                const stat = await fs.promises.stat(installerPath);
+                res.writeHead(200, {
+                  "Content-Type": "application/vnd.microsoft.portable-executable",
+                  "Content-Length": stat.size,
+                  "Content-Disposition": 'attachment; filename="Pacana-Setup.exe"',
+                });
+                fs.createReadStream(installerPath).pipe(res);
+                return;
+              } catch {
+                res.writeHead(404);
+                res.end("Installer not found. Run npm run desktop:installer first.");
+                return;
+              }
+            }
+            next();
+          });
+        },
+      },
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
         inspectorPort: false,
