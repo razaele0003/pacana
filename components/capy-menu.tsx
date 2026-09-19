@@ -6,7 +6,7 @@ interface CapyMenuProps {
   isResting: boolean;
   onSelectEmote: (type: EmoteType) => void;
   onToggleRest: () => void;
-  onSpawnSnack: () => void;
+  onSpawnSnack?: () => void;
   onPressFocus?: () => void;
 }
 
@@ -25,19 +25,6 @@ export default function CapyMenu({
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* 1. Snack / Planting */}
-      <button
-        type="button"
-        className="capy-menu-btn"
-        title="Plant a tree snack (grows blossoming tree)"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSpawnSnack();
-        }}
-      >
-        <span className="menu-emoji">🌱</span>
-      </button>
 
 
       {/* 3. Happy emote */}

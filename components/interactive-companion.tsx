@@ -671,7 +671,7 @@ export default function InteractiveCompanion({
 
                   // 1. Getting up & planting seed sequence on the cushion
                   setIsGettingUp(true);
-                  setDockedPose("bite"); // planting gesture
+                  setDockedPose("plant"); // 8-frame planting animation
                   updateCushionSeed("planted", 1);
                   playCompanionSound("pop");
 
@@ -687,11 +687,12 @@ export default function InteractiveCompanion({
                       }
                     : undefined;
 
-                  // 3. After planting hop completes (~480ms), step out and start walking!
+                  // 3. After planting sequence completes (8 frames * 130ms = 1040ms), step out and start walking!
                   setTimeout(() => {
                     setIsGettingUp(false);
+                    setDockedPose("idle");
                     onToggleFloating(true, startPos);
-                  }, 480);
+                  }, 1040);
                 }}
               >
                 <Move size={12} /> {isGettingUp ? "Planting seed..." : "Let Capy wander"}

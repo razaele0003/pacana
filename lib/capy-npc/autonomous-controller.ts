@@ -331,23 +331,31 @@ export function useAutonomousCapy({
         CLEARANCE_Y
       );
 
-      waypointsRef.current = path;
-      currentGoalRef.current = "eat_snack";
-      changeMode("walk_to_snack");
-      setPose("walk");
-
-      // Excited notice emote!
-      triggerEmote("excited", 900);
-      playCompanionSound("pop");
-
       if (path.length > 0) {
         const first = path[0];
         if (first.x !== currentPos.x) {
           setFacing(first.x > currentPos.x ? "right" : "left");
         }
       }
+
+      // Happy / surprise reaction when spotting the tree, then walk towards it
+      waypointsRef.current = [];
+      currentGoalRef.current = "eat_snack";
+      setPose("happy");
+      playCompanionSound("pop");
+
+      if (transitionTimerRef.current) {
+        clearTimeout(transitionTimerRef.current);
+      }
+
+      transitionTimerRef.current = setTimeout(() => {
+        transitionTimerRef.current = null;
+        waypointsRef.current = path;
+        changeMode("walk_to_snack");
+        setPose("walk");
+      }, 550);
     },
-    [refreshObstacles, triggerEmote, changeMode]
+    [refreshObstacles, changeMode]
   );
 
   // Steer autonomously to a specific point (e.g. walking home to the cushion)
@@ -507,35 +515,6 @@ export function useAutonomousCapy({
     [refreshObstacles, triggerEmote, planNextWander, changeMode]
   );
 
-  // Spawn growing plant sequence with dedicated 8-frame planting animation
-  const spawnLeaf = useCallback(
-    (customPoint?: Point) => {
-      if (
-        isDraggingRef.current ||
-        modeRef.current === "eating" ||
-        modeRef.current === "planting"
-      ) {
-        return;
-      }
-
-      if (modeRef.current === "resting") {
-        interruptedGoalRef.current = "plant";
-        changeMode("waking");
-        setPose("stretch");
-        playCompanionSound("pet");
-        return;
-      }
-
-      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-      waypointsRef.current = [];
-      currentGoalRef.current = "plant";
-      changeMode("planting");
-      setPose("plant");
-      playCompanionSound("pop");
-    },
-    [changeMode]
-  );
-
   // Autonomous wild tree growth: a seed spontaneously sprouts on screen for Cappy to find and eat
   const spawnWildTree = useCallback(() => {
     if (activeLeafRef.current || isDraggingRef.current) return;
@@ -592,6 +571,14 @@ export function useAutonomousCapy({
       }
     }, 140);
   }, [refreshObstacles, startApproachingReadyLeaf]);
+
+  // Spawns a tree snack by spontaneously sprouting a wild tree (no planting animation on screen)
+  const spawnLeaf = useCallback(
+    (_customPoint?: Point) => {
+      spawnWildTree();
+    },
+    [spawnWildTree]
+  );
 
   // Petting interaction (temporary reaction that DOES NOT cancel current goal!)
   const triggerPet = useCallback(() => {
