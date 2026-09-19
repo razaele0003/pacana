@@ -6,12 +6,6 @@ import {
   Rect,
   ViewportBounds,
   queryUIObstacles,
-  getRandomSafePoint,
-  getRandomReachableSafePoint,
-  findPathAroundObstacles,
-  isPointInBounds,
-  CLEARANCE_X,
-  CLEARANCE_Y,
   WALL_MARGIN_X,
   WALL_MARGIN_Y,
   CAPPY_WIDTH,
@@ -237,7 +231,6 @@ export function useAutonomousCapy({
 
       refreshObstacles();
       const vp = viewportRef.current;
-      const obstacles = obstaclesRef.current;
       const current = posRef.current;
 
       // Bias destination: if on right half, walk left towards the room; if on left half, walk right
@@ -249,25 +242,29 @@ export function useAutonomousCapy({
           ? "right"
           : undefined);
 
-      // Pick a safe reachable random destination in available screen space
-      const target = getRandomReachableSafePoint(
-        current,
-        obstacles,
-        vp,
-        CLEARANCE_X,
-        CLEARANCE_Y,
-        preferredSide
-      );
+      // Pick a random destination in available screen space without obstacle restrictions
+      const minX = 32;
+      const maxX = Math.max(minX + 50, vp.width - 80);
+      const minY = 48;
+      const maxY = Math.max(minY + 50, vp.height - 90);
 
-      // Compute route around any intervening obstacles
-      const path = findPathAroundObstacles(
-        current,
-        target,
-        obstacles,
-        vp,
-        CLEARANCE_X,
-        CLEARANCE_Y
-      );
+      let targetX: number;
+      if (preferredSide === "left") {
+        targetX = minX + Math.random() * (Math.max(minX + 50, vp.width * 0.45) - minX);
+      } else if (preferredSide === "right") {
+        const startX = Math.min(maxX - 50, vp.width * 0.55);
+        targetX = startX + Math.random() * (maxX - startX);
+      } else {
+        targetX = minX + Math.random() * (maxX - minX);
+      }
+      const targetY = minY + Math.random() * (maxY - minY);
+      const target: Point = {
+        x: Math.round(Math.max(minX, Math.min(maxX, targetX))),
+        y: Math.round(Math.max(minY, Math.min(maxY, targetY))),
+      };
+
+      // Direct straight path to destination (no obstacle blocking)
+      const path: Point[] = [target];
 
       waypointsRef.current = path;
       currentGoalRef.current = "wander";
@@ -325,17 +322,8 @@ export function useAutonomousCapy({
 
       refreshObstacles();
       const currentPos = posRef.current;
-      const obstacles = obstaclesRef.current;
-      const vp = viewportRef.current;
 
-      const path = findPathAroundObstacles(
-        currentPos,
-        { x: readyLeaf.x, y: readyLeaf.y },
-        obstacles,
-        vp,
-        CLEARANCE_X,
-        CLEARANCE_Y
-      );
+      const path: Point[] = [{ x: readyLeaf.x, y: readyLeaf.y }];
 
       if (path.length > 0) {
         const first = path[0];
@@ -375,29 +363,9 @@ export function useAutonomousCapy({
       onArrivedRef.current = onArrived || null;
 
       refreshObstacles();
-      const vp = viewportRef.current;
-      const obstacles = obstaclesRef.current;
       const current = posRef.current;
 
-      // Filter out any obstacle enclosing destination (such as sidebar)
-      const filteredObstacles = obstacles.filter(
-        (obs) =>
-          !(
-            target.x >= obs.left - 24 &&
-            target.x <= obs.right + 24 &&
-            target.y >= obs.top - 24 &&
-            target.y <= obs.bottom + 24
-          )
-      );
-
-      const path = findPathAroundObstacles(
-        current,
-        target,
-        filteredObstacles,
-        vp,
-        CLEARANCE_X,
-        CLEARANCE_Y
-      );
+      const path: Point[] = [target];
 
       waypointsRef.current = path;
       currentGoalRef.current = "go_home";
@@ -429,7 +397,6 @@ export function useAutonomousCapy({
 
       refreshObstacles();
       const vp = viewportRef.current;
-      const obstacles = obstaclesRef.current;
       const current = posRef.current;
 
       // Locate target button (custom target, primary timer, or sidebar focus tab button)
@@ -479,29 +446,8 @@ export function useAutonomousCapy({
       const targetPoint: Point = { x: targetX, y: targetY };
       targetPosRef.current = targetPoint;
 
-      // Filter out obstacles enclosing the button or targetPoint so Cappy can pathfind all the way to it
-      const filteredObstacles = obstacles.filter(
-        (obs) =>
-          !(
-            (rect.left < obs.right &&
-              rect.right > obs.left &&
-              rect.top < obs.bottom &&
-              rect.bottom > obs.top) ||
-            (targetPoint.x >= obs.left - CLEARANCE_X &&
-              targetPoint.x <= obs.right + CLEARANCE_X &&
-              targetPoint.y >= obs.top - CLEARANCE_Y &&
-              targetPoint.y <= obs.bottom + CLEARANCE_Y)
-          )
-      );
-
-      const path = findPathAroundObstacles(
-        current,
-        targetPoint,
-        filteredObstacles,
-        vp,
-        CLEARANCE_X,
-        CLEARANCE_Y
-      );
+      // Direct path to focus button (no obstacle blocking)
+      const path: Point[] = [targetPoint];
 
       waypointsRef.current = path;
       currentGoalRef.current = "press_focus";
@@ -527,9 +473,16 @@ export function useAutonomousCapy({
 
     refreshObstacles();
     const vp = viewportRef.current;
-    const obstacles = obstaclesRef.current;
 
-    const target = getRandomSafePoint(obstacles, vp, CLEARANCE_X, CLEARANCE_Y, 40);
+    const minX = 40;
+    const maxX = Math.max(minX + 50, vp.width - 90);
+    const minY = 60;
+    const maxY = Math.max(minY + 50, vp.height - 110);
+
+    const target: Point = {
+      x: Math.round(minX + Math.random() * (maxX - minX)),
+      y: Math.round(minY + Math.random() * (maxY - minY)),
+    };
 
     const leaf: SpawnedLeaf = {
       id: `wild-leaf-${Date.now()}`,

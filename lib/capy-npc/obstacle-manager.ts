@@ -120,79 +120,8 @@ export function queryUIObstacles(): {
     height: Math.min(window.innerHeight, clientH),
   };
 
-  const selectors = [
-    "[data-capybara-obstacle]",
-    "aside.sidebar",
-    "header.topbar",
-    ".desktop-titlebar",
-    ".timer-card",
-    ".scoreboard-card",
-    ".dialog",
-    ".modal",
-    ".modal-card",
-    ".focus-side",
-    ".grow-card",
-    ".fullscreen-actions",
-  ];
-
-  const elements = document.querySelectorAll(selectors.join(", "));
-  const rawRects: Rect[] = [];
-
-  elements.forEach((el) => {
-    // Skip if hidden or detached
-    const style = window.getComputedStyle(el);
-    if (
-      style.display === "none" ||
-      style.visibility === "hidden" ||
-      style.opacity === "0"
-    ) {
-      return;
-    }
-
-    const rect = el.getBoundingClientRect();
-    // Only consider non-empty elements visible within or near viewport
-    if (
-      rect.width > 20 &&
-      rect.height > 20 &&
-      rect.right > 0 &&
-      rect.bottom > 0 &&
-      rect.left < viewport.width &&
-      rect.top < viewport.height
-    ) {
-      rawRects.push({
-        left: Math.max(0, rect.left),
-        top: Math.max(0, rect.top),
-        right: Math.min(viewport.width, rect.right),
-        bottom: Math.min(viewport.height, rect.bottom),
-        width: rect.width,
-        height: rect.height,
-      });
-    }
-  });
-
-  // Merge heavily overlapping boxes to reduce pathfinding complexity
-  const merged: Rect[] = [];
-  for (const r of rawRects) {
-    let absorbed = false;
-    for (let i = 0; i < merged.length; i++) {
-      const m = merged[i];
-      // If r is completely inside m
-      if (
-        r.left >= m.left &&
-        r.right <= m.right &&
-        r.top >= m.top &&
-        r.bottom <= m.bottom
-      ) {
-        absorbed = true;
-        break;
-      }
-    }
-    if (!absorbed) {
-      merged.push(r);
-    }
-  }
-
-  return { obstacles: merged, viewport };
+  // Obstacle avoidance removed per user request: Cappy wanders freely across the screen
+  return { obstacles: [], viewport };
 }
 
 /**
