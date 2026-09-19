@@ -7,15 +7,19 @@ interface CapyEmoteBubbleProps {
 }
 
 export default function CapyEmoteBubble({ type }: CapyEmoteBubbleProps) {
-  // Only the thinking emoji is displayed per user request ("remove for all that pop up emoji, just leaveit for the thinking emoji ok")
-  if (type !== "thinking") {
+  // Only thinking (💭) and reading (📖) emojis are displayed per user requirements
+  if (type !== "thinking" && type !== "reading" && type !== "read") {
     return null;
   }
 
   return (
-    <div className="capy-emote-bubble emote-thinking" aria-hidden="true">
+    <div className={`capy-emote-bubble emote-${type}`} aria-hidden="true">
       <div className="emote-bubble-content">
-        <span className="emote-icon icon-thinking">💭</span>
+        {type === "thinking" ? (
+          <span className="emote-icon icon-thinking">💭</span>
+        ) : (
+          <span className="emote-icon icon-reading">📖</span>
+        )}
       </div>
       <div className="emote-bubble-tail" />
     </div>

@@ -30,6 +30,7 @@ export type CompanionMode =
   | "dragged"
   | "planting"
   | "thinking"
+  | "reading"
   | "idle";
 
 export type CapyGoalType =
@@ -47,6 +48,8 @@ export type EmoteType =
   | "excited"
   | "eating"
   | "thinking"
+  | "reading"
+  | "read"
   | "rest";
 
 export interface ActiveEmote {
@@ -140,7 +143,7 @@ export function useAutonomousCapy({
     viewportRef.current = viewport;
   }, []);
 
-  // Temporary Emote Trigger (~0.8 - 1.4s) - Only thinking emoji displays per user request
+  // Temporary Emote Trigger (~0.8 - 2.2s) - thinking (💭) and reading (📖) emojis
   const triggerEmote = useCallback(
     (type: EmoteType, duration = 1100) => {
       if (emoteTimerRef.current) {
@@ -148,7 +151,7 @@ export function useAutonomousCapy({
         emoteTimerRef.current = null;
       }
 
-      if (type === "thinking") {
+      if (type === "thinking" || type === "reading" || type === "read") {
         const emote: ActiveEmote = {
           type,
           id: `emote-${Date.now()}-${Math.random()}`,
@@ -161,11 +164,12 @@ export function useAutonomousCapy({
             emoteTimerRef.current = null;
             setActiveEmote((cur) => (cur?.id === emote.id ? null : cur));
 
-            // After thinking emoji finishes, continue roaming around the page!
+            // After thinking or reading emoji finishes, continue roaming around the page!
             if (
               modeRef.current === "wander" ||
               modeRef.current === "idle" ||
-              modeRef.current === "thinking"
+              modeRef.current === "thinking" ||
+              modeRef.current === "reading"
             ) {
               currentGoalRef.current = "wander";
               changeMode("wander");
@@ -184,7 +188,8 @@ export function useAutonomousCapy({
             if (
               modeRef.current === "wander" ||
               modeRef.current === "idle" ||
-              modeRef.current === "thinking"
+              modeRef.current === "thinking" ||
+              modeRef.current === "reading"
             ) {
               currentGoalRef.current = "wander";
               changeMode("wander");
@@ -291,6 +296,18 @@ export function useAutonomousCapy({
         setPose("stretch");
         playCompanionSound("pet");
         return;
+      }
+
+      if (modeRef.current === "reading" || modeRef.current === "thinking") {
+        setActiveEmote(null);
+        if (emoteTimerRef.current) {
+          clearTimeout(emoteTimerRef.current);
+          emoteTimerRef.current = null;
+        }
+        if (transitionTimerRef.current) {
+          clearTimeout(transitionTimerRef.current);
+          transitionTimerRef.current = null;
+        }
       }
 
       const readyLeaf: SpawnedLeaf = {
@@ -518,6 +535,63 @@ export function useAutonomousCapy({
     },
     [changeMode]
   );
+
+  // Autonomous wild tree growth: a seed spontaneously sprouts on screen for Cappy to find and eat
+  const spawnWildTree = useCallback(() => {
+    if (activeLeafRef.current || isDraggingRef.current) return;
+
+    refreshObstacles();
+    const vp = viewportRef.current;
+    const obstacles = obstaclesRef.current;
+
+    const target = getRandomSafePoint(obstacles, vp, CLEARANCE_X, CLEARANCE_Y, 40);
+
+    const leaf: SpawnedLeaf = {
+      id: `wild-leaf-${Date.now()}`,
+      x: target.x,
+      y: target.y,
+      createdAt: Date.now(),
+      stage: "sprouting",
+      treeStage: 1,
+      isBeingEaten: false,
+    };
+
+    setActiveLeaf(leaf);
+    playCompanionSound("pop");
+
+    let step = 1;
+    const growthInterval = setInterval(() => {
+      step += 1;
+      if (step >= 10) {
+        clearInterval(growthInterval);
+        setActiveLeaf((curr) => {
+          if (curr && curr.id === leaf.id) {
+            const readyLeaf: SpawnedLeaf = {
+              ...curr,
+              stage: "ready",
+              treeStage: 10,
+            };
+            startApproachingReadyLeaf(readyLeaf);
+            return readyLeaf;
+          }
+          return curr;
+        });
+      } else {
+        setActiveLeaf((curr) =>
+          curr && curr.id === leaf.id
+            ? {
+                ...curr,
+                stage: step >= 6 ? "growing" : "sprouting",
+                treeStage: step,
+              }
+            : curr
+        );
+        if (step === 4 || step === 8) {
+          playCompanionSound("pop");
+        }
+      }
+    }, 140);
+  }, [refreshObstacles, startApproachingReadyLeaf]);
 
   // Petting interaction (temporary reaction that DOES NOT cancel current goal!)
   const triggerPet = useCallback(() => {
@@ -752,14 +826,28 @@ export function useAutonomousCapy({
         setPose("walk");
         planNextWander();
       }
-    } else if (modeRef.current === "thinking") {
-      // Thinking animation completed (10 frames finished), resume wandering
+    } else if (modeRef.current === "thinking" || modeRef.current === "reading") {
+      // Thinking or reading animation completed (10 frames finished), resume wandering
       currentGoalRef.current = "wander";
       changeMode("wander");
       setPose("walk");
       planNextWander();
     }
   }, [triggerEmote, startPressFocus, startApproachingReadyLeaf, planNextWander, changeMode, facing, spawnLeaf]);
+
+  // Goal: When a tree suddenly pops up on screen and is ready, Capy will ALWAYS go and eat it!
+  useEffect(() => {
+    if (activeLeaf && activeLeaf.stage === "ready" && !activeLeaf.isBeingEaten) {
+      if (
+        modeRef.current !== "walk_to_snack" &&
+        modeRef.current !== "eating" &&
+        modeRef.current !== "waking" &&
+        !isDraggingRef.current
+      ) {
+        startApproachingReadyLeaf(activeLeaf);
+      }
+    }
+  }, [activeLeaf, startApproachingReadyLeaf]);
 
   // Viewport & Obstacle resize adapt
   useEffect(() => {
@@ -995,11 +1083,43 @@ export function useAutonomousCapy({
             } else {
               // Reached regular wander waypoint
               wanderStepCountRef.current++;
-              // Periodic thinking pause every 4 wander waypoints
-              if (wanderStepCountRef.current % 4 === 0) {
-                setPose("thinking");
-                changeMode("thinking");
-                triggerEmote("thinking", 1400);
+              const stepCount = wanderStepCountRef.current;
+
+              // Periodic autonomous idle variety every 4 wander waypoints:
+              // Reading a book with 📖 emoji, cozy sleep nap with Zzz, wild tree sprouting, or thinking with 💭
+              if (stepCount % 4 === 0) {
+                const roll = Math.random();
+                if (roll < 0.35) {
+                  // 1. Read a book with 📖 reading emoji!
+                  setPose("read");
+                  changeMode("reading");
+                  triggerEmote("reading", 2400);
+                } else if (roll < 0.65) {
+                  // 2. Cozy sleep nap with Zzz, then wake up and stretch!
+                  setPose("sleep");
+                  changeMode("resting");
+                  transitionTimerRef.current = setTimeout(() => {
+                    transitionTimerRef.current = null;
+                    if (modeRef.current === "resting") {
+                      wakeUp();
+                    }
+                  }, 3200);
+                } else if (roll < 0.85 && !activeLeafRef.current) {
+                  // 3. Spontaneous wild tree sprouts for Capy to eat!
+                  spawnWildTree();
+                  setPose("idle");
+                  transitionTimerRef.current = setTimeout(() => {
+                    transitionTimerRef.current = null;
+                    if (modeRef.current === "wander" || modeRef.current === "idle") {
+                      planNextWander();
+                    }
+                  }, 500);
+                } else {
+                  // 4. Thinking pause with 💭 emoji!
+                  setPose("thinking");
+                  changeMode("thinking");
+                  triggerEmote("thinking", 1400);
+                }
               } else {
                 setPose("walk");
                 transitionTimerRef.current = setTimeout(() => {
