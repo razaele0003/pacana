@@ -375,15 +375,13 @@ export default function Pacana() {
   return (
     <div className="app-shell">
       <div className="desktop-titlebar" aria-hidden="true">
-        <div className="titlebar-left">
+        <div className="titlebar-brand">
           <span className="titlebar-icon">
             <Leaf size={12} strokeWidth={2.6} />
           </span>
           <span className="titlebar-title">Pacana</span>
         </div>
-        <div className="titlebar-right">
-          <div className="titlebar-drag-region" />
-        </div>
+        <div className="titlebar-drag-region" />
       </div>
       <aside className="sidebar">
         <a
