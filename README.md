@@ -32,7 +32,7 @@ Built with a **local-first** architecture, Pacana requires no sign-ups, runs no 
 - 🔄 **Balanced Session Rhythm**  
   Structured cadence where **1 session = 1 focus block + 1 short break**. Completing 4 sessions unlocks an extended long break to encourage sustainable pacing.
 - 🐹 **Interactive Capybara Companion (Cappy)**  
-  An autonomous desktop buddy who wanders the screen, avoids UI cards with real obstacle-aware pathfinding, takes naps, reacts to emotes (heart, sparkle, read, sleep), and eats snack trees you plant for him.
+  An autonomous desktop buddy who freely wanders across your workspace, takes naps, reacts to emotes (heart, sparkle, read, sleep), and eats snack trees you plant for him.
 - 📓 **Time Journal & Hourly Check-ins**  
   Gentle, non-intrusive reflection prompts that let you record quick notes and photo attachments throughout the day. Accumulated checkpoints can be reviewed whenever you are ready.
 - 🌱 **Experience Points & Mindful Progress**  
@@ -73,15 +73,16 @@ Built with a **local-first** architecture, Pacana requires no sign-ups, runs no 
 Cappy is your cozy companion who shares your workspace while you focus.
 
 <p align="center">
-  <img src="docs/images/cappy.png" alt="Cappy wandering near the timer" width="85%" />
+  <img src="docs/images/cappy.png" alt="Cappy, your cozy capybara companion" width="85%" />
 </p>
 
-### Autonomous Behaviors & Physics
-- **Smart Obstacle Avoidance**: Cappy navigates the screen using ray-box intersection algorithms and waypoint pathfinding (`core/obstacle-navigation.ts`), intelligently steering around timer cards, control buttons, and modals.
+### Autonomous Behaviors & Interactions
+- **Gentle Workspace Strolling**: Cappy wanders peacefully across your workspace at his own relaxed pace, pausing to look around or keep you company during deep work sessions.
+- **Interactive Quick-Action Menu**: Click on Cappy to bring up his squarish emote menu (Heart, Sparkles, Read, Sleep) to interact with him at any moment.
 - **Draggable & Responsive**: Click and drag Cappy anywhere across the screen. When released, he gently reorients and continues his walk.
 - **Undisturbed Sleeping**: Put Cappy to sleep with the 💤 emote. He will peacefully nap in place until you choose to wake him up by dragging him, clicking on him, or choosing another action.
-- **Tree Snack Sprouting**: Click the leaf emote (🍃) to sprout a snack tree randomly on the page. Cappy reacts with surprise, walks over to the tree, eats the leaves, and returns to his normal stroll. Even if you interrupt him mid-walk with an emote or drag him away, he remembers his snack and heads back to finish eating.
-- **Call Cappy Home**: Need Cappy close by? Click the 🏠 icon to summon him immediately back to his cushion next to the timer.
+- **Snack Tree Garden**: Plant a seed that grows independently into a snack tree on your page while you focus.
+- **Call Cappy Home**: Need Cappy close by? Click the 🏠 icon to summon him back to his cushion next to the timer, where he'll check for ready snacks and settle down.
 
 ---
 
@@ -198,8 +199,8 @@ pacana/
 ├── core/                 # Pure domain logic (framework-agnostic)
 │   ├── engine.ts                 # Pomodoro state machine & timestamp reconciliation
 │   ├── model.ts                  # Zod schemas, data contracts & default settings
-│   ├── obstacle-navigation.ts    # Ray-box collision & obstacle avoidance pathfinding
-│   └── format.ts                 # Time, date, and duration formatting helpers
+│   ├── ringtones.ts              # Web Audio synthesized alarms & presets
+│   └── schedule.ts               # Hourly check-in and timeline scheduling
 ├── data/                 # Persistence layer
 │   ├── store.ts                  # IndexedDB transactions & local storage operations
 │   └── backup.ts                 # Version-1 JSON backup import/export validation
