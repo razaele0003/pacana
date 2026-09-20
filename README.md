@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-amber.svg?style=flat-square" alt="License: MIT" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-All%20Rights%20Reserved-red.svg?style=flat-square" alt="License: All Rights Reserved" /></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-%3E%3D22.13.0-emerald.svg?style=flat-square" alt="Node.js: >=22.13.0" /></a>
   <a href="#-desktop-app"><img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Web-blue.svg?style=flat-square" alt="Platform: Windows | Web" /></a>
   <a href="#-local-first--privacy"><img src="https://img.shields.io/badge/Storage-IndexedDB%20Local--First-purple.svg?style=flat-square" alt="Storage: IndexedDB Local-First" /></a>
@@ -300,6 +300,8 @@ Focus is not a high-stress race, and productivity shouldn't feel punitive. Pacan
 
 ---
 
-## 📄 License
+## 📄 License & Copyright
 
-Distributed under the **MIT License**. See `LICENSE` for more information.
+Copyright © 2026 Eleazar (razaele0003). **All rights reserved.**
+
+This software, including all source code, artwork, character designs (including "Cappy"), graphics, sounds, and documentation, is proprietary intellectual property. Unauthorized copying, distribution, modification, public display, or commercial use of any part of this project is strictly prohibited without explicit written permission from the author.
