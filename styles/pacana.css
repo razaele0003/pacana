@@ -686,7 +686,7 @@ select {
   padding: 44px 0 30px;
   text-align: center;
 }
-.empty-rhythm svg {
+.empty-rhythm > svg {
   margin: 0 auto 15px;
   color: #8b9c73;
 }
@@ -700,7 +700,16 @@ select {
 .empty-rhythm button {
   font-size: 11px;
   margin-top: 18px;
-  padding: 8px 10px;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.empty-rhythm button svg {
+  margin: 0;
+  display: block;
+  flex-shrink: 0;
 }
 .next-check {
   margin: 15px 0 22px;
@@ -743,7 +752,7 @@ select {
   justify-content: space-between;
   align-items: center;
 }
-.kind-note svg {
+.kind-note > svg {
   margin: 0 auto 12px;
   color: #7f9065;
 }
@@ -3281,6 +3290,7 @@ progress::-webkit-progress-value {
 .companion-wander-btn svg {
   display: block;
   flex-shrink: 0;
+  margin: 0;
 }
 .companion-wander-btn span {
   display: inline-block;
@@ -3559,6 +3569,7 @@ progress::-webkit-progress-value {
 .dock-call-btn svg {
   display: block;
   flex-shrink: 0;
+  margin: 0;
 }
 .dock-call-btn span {
   display: inline-block;
