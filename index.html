@@ -1,2 +1,146 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="description" content="Focus on what you're doing. Remember where your time went."/><link rel="icon" href="/favicon.svg"/><title>Pacana — Cozy Focus & Time Journal</title></head><body><div id="root"></div><script type="module" src="/vercel-entry.tsx"></script></body></html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pacana — Cozy Pomodoro Timer & Hourly Journal Logger | Study with Cappy</title>
+
+    <meta name="title" content="Pacana — Cozy Pomodoro Timer & Hourly Journal Logger | Study with Cappy" />
+    <meta
+      name="description"
+      content="Pacana is a free, cozy aesthetic Pomodoro timer and hourly journal logger featuring Cappy the capybara companion. Focus with customizable cycles, gentle chimes, hourly check-in popups, and 100% offline privacy."
+    />
+    <meta
+      name="keywords"
+      content="pomodoro timer, journal logger, hourly logger, pacana, aesthetic pomodoro timer, capybara study timer, focus timer, study with me, cappy, time tracker, offline pomodoro, aesthetic productivity app, cute pomodoro, accountability timer, hourly reflection, free pomodoro timer, online pomodoro timer, aesthetic study timer, lofi pomodoro timer, capybara pomodoro, desktop pomodoro timer, pomodoro app, hourly journal, best pomodoro timer"
+    />
+    <meta name="author" content="Eleazar / Pacana" />
+    <meta name="application-name" content="Pacana" />
+    <meta name="apple-mobile-web-app-title" content="Pacana" />
+    <meta name="theme-color" content="#2e4333" />
+    <link rel="canonical" href="https://pacana-three.vercel.app/" />
+    <link rel="icon" href="/favicon.svg" />
+
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <meta name="bingbot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <meta name="baiduspider" content="index, follow" />
+    <meta name="yandex" content="index, follow" />
+    <meta name="naver" content="index, follow" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://pacana-three.vercel.app/" />
+    <meta property="og:site_name" content="Pacana" />
+    <meta property="og:title" content="Pacana — Cozy Pomodoro Timer & Hourly Journal Logger" />
+    <meta
+      property="og:description"
+      content="Stay focused with Cappy the capybara. Aesthetic Pomodoro cycles, hourly journal check-ins, custom ringtones, and 100% offline local privacy."
+    />
+    <meta property="og:image" content="https://pacana-three.vercel.app/art/companion.webp" />
+    <meta property="og:image:alt" content="Pacana Cozy Pomodoro Timer with Cappy the Capybara" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://pacana-three.vercel.app/" />
+    <meta name="twitter:title" content="Pacana — Cozy Pomodoro Timer & Hourly Journal Logger" />
+    <meta
+      name="twitter:description"
+      content="Aesthetic Pomodoro timer and hourly journal logger with Cappy the capybara companion. Free, cozy, and offline."
+    />
+    <meta name="twitter:image" content="https://pacana-three.vercel.app/art/companion.webp" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebApplication",
+            "@id": "https://pacana-three.vercel.app/#webapp",
+            "name": "Pacana",
+            "alternateName": [
+              "Pacana Pomodoro Timer",
+              "Pacana Journal Logger",
+              "Pacana Focus App",
+              "Cappy Capybara Timer",
+              "Pacana Aesthetic Timer"
+            ],
+            "url": "https://pacana-three.vercel.app/",
+            "description": "Pacana is a free, cozy aesthetic Pomodoro timer and hourly journal logger featuring Cappy the capybara companion. Focus with customizable cycles, gentle chimes, hourly check-in popups, and 100% offline privacy.",
+            "applicationCategory": "ProductivityApplication",
+            "operatingSystem": "Web, Windows, macOS, Linux",
+            "browserRequirements": "Requires JavaScript. Requires HTML5.",
+            "softwareVersion": "0.1.2",
+            "inLanguage": "en",
+            "keywords": "pomodoro timer, journal logger, hourly logger, pacana, aesthetic pomodoro timer, capybara study timer, focus timer, study with me, cappy, time tracker, offline pomodoro, aesthetic productivity app",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "featureList": [
+              "Pomodoro focus timer with customizable work and break intervals",
+              "Hourly accountability check-in logger with automatic reflection popup",
+              "Interactive animated capybara companion (Cappy)",
+              "Searchable ringtone browser with custom audio upload support",
+              "Daily timeline journal with photo reflections and mood tracking",
+              "100% offline-first local data storage with zero tracking or ads"
+            ],
+            "author": {
+              "@type": "Person",
+              "name": "Eleazar"
+            }
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://pacana-three.vercel.app/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "What is Pacana?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Pacana is a free, cozy aesthetic Pomodoro timer and hourly journal logger featuring Cappy the capybara companion. It combines structured focus cycles with hourly accountability reflections to help students, developers, and creatives remember where their time went."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What is the best aesthetic Pomodoro timer?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Pacana is widely regarded as one of the best aesthetic Pomodoro timers, inspired by gouache woodland artwork. It includes an animated capybara named Cappy, gentle chimes, custom audio ringtone uploads, and a distraction-free fullscreen focus mode."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What is the best journal logger for time tracking?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Pacana is an hourly journal logger that schedules gentle check-ins on the clock hour or custom intervals. When an hourly check-in arrives, an optional popup invites you to record what you accomplished, your mood, and photos. You can easily toggle this automatic popup on or off at any time."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Is Pacana completely free and offline?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes, Pacana is 100% free with no ads, tracking, or accounts required. All data is saved locally on your device using IndexedDB, and it works completely offline on both Web and Desktop."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Who is Cappy in Pacana?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Cappy is Pacana's cozy capybara companion who accompanies your study and focus sessions. Cappy responds to your timer state, walks around your garden, eats snacks, and shouts in sync with your alarm when a focus session finishes."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/vercel-entry.tsx"></script>
+  </body>
+</html>

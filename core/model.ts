@@ -20,6 +20,7 @@ export type Settings = {
   customRingtones?: CustomRingtone[];
   ringtoneFavorites?: string[];
   recentRingtones?: string[];
+  autoPromptCheckin?: boolean;
   notifications: boolean;
   onboarded: boolean;
 };
@@ -113,6 +114,7 @@ export const defaults = (timezone = "Asia/Manila"): State => ({
     customRingtones: [],
     ringtoneFavorites: [],
     recentRingtones: [],
+    autoPromptCheckin: true,
     notifications: false,
     onboarded: false,
   },

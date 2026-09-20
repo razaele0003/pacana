@@ -52,7 +52,14 @@ test("ringtone preferences preserve old journals and round-trip through backup",
   delete old.settings.ringtone;
   delete old.journalEntries;
   assert.equal(parseBackup(old).settings.ringtone, "classic");
+  assert.equal(parseBackup(old).settings.autoPromptCheckin, true);
   assert.deepEqual(parseBackup(old).journalEntries, []);
+  const disabledPromptState = defaults();
+  disabledPromptState.settings.autoPromptCheckin = false;
+  assert.equal(
+    parseBackup(JSON.parse(JSON.stringify(disabledPromptState))).settings.autoPromptCheckin,
+    false,
+  );
   for (const ringtone of [
     "classic",
     "woodland",

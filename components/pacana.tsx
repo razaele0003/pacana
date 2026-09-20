@@ -320,6 +320,13 @@ export default function Pacana() {
               : `${result.checkpoints} check-in${result.checkpoints === 1 ? "" : "s"} ready to log.`;
             setNotice(text);
 
+            if (result.checkpoints && s.settings.autoPromptCheckin !== false && !editing) {
+              const pendingCheckpoints = s.checkpoints.filter((c) => c.status === "pending");
+              if (pendingCheckpoints.length > 0) {
+                setEditing(pendingCheckpoints[pendingCheckpoints.length - 1]);
+              }
+            }
+
             if (result.completed) {
               const completedTimer = s.timer;
               const timerId = completedTimer?.id;
@@ -1407,6 +1414,12 @@ export default function Pacana() {
           </p>
           <LogForm
             checkpoint={editing}
+            autoPromptCheckin={state.settings.autoPromptCheckin ?? true}
+            onToggleAutoPrompt={(val) => {
+              void update((s) => {
+                s.settings.autoPromptCheckin = val;
+              });
+            }}
             save={async (activity, cat, mood, skip, photo) => {
               if (
                 await update((s) =>
@@ -1774,6 +1787,8 @@ function ElapsedCard({
 function LogForm({
   checkpoint,
   save,
+  autoPromptCheckin,
+  onToggleAutoPrompt,
 }: {
   checkpoint: Checkpoint;
   save: (
@@ -1783,6 +1798,8 @@ function LogForm({
     skip: boolean,
     photo?: string,
   ) => void;
+  autoPromptCheckin?: boolean;
+  onToggleAutoPrompt?: (v: boolean) => void;
 }) {
   const [activity, setActivity] = useState(checkpoint.activity),
     [category, setCategory] = useState(checkpoint.category),
@@ -1842,6 +1859,18 @@ function LogForm({
           Skip this period
         </button>
       </div>
+      {onToggleAutoPrompt && (
+        <div style={{ marginTop: "1rem", paddingTop: "0.75rem", borderTop: "1px solid var(--border-subtle, rgba(0,0,0,0.08))" }}>
+          <label className="toggle-label" style={{ fontSize: "0.85rem", opacity: 0.85, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+            <input
+              type="checkbox"
+              checked={autoPromptCheckin ?? true}
+              onChange={(e) => onToggleAutoPrompt(e.target.checked)}
+            />
+            <span>Automatically show popup when check-ins are ready</span>
+          </label>
+        </div>
+      )}
     </form>
   );
 }
@@ -2153,6 +2182,19 @@ function Preferences({
               }}
             />{" "}
             Play a chime for check-ins
+          </label>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={state.settings.autoPromptCheckin ?? true}
+              onChange={(e) => {
+                const autoPrompt = e.target.checked;
+                void update((s) => {
+                  s.settings.autoPromptCheckin = autoPrompt;
+                });
+              }}
+            />{" "}
+            Prompt to log check-ins automatically
           </label>
           <RingtoneBrowser
             settings={state.settings}

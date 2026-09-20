@@ -76,6 +76,7 @@ const schema = z.object({
     customRingtones: z.array(customRingtoneItem).max(50).optional().default([]),
     ringtoneFavorites: z.array(z.string().max(100)).max(100).optional().default([]),
     recentRingtones: z.array(z.string().max(100)).max(20).optional().default([]),
+    autoPromptCheckin: z.boolean().optional().default(true),
     notifications: z.boolean(),
     onboarded: z.boolean(),
   }),
