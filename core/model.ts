@@ -4,6 +4,7 @@ export type CustomRingtone = {
   id: string;
   name: string;
   data: string;
+  duration?: number;
 };
 export type Settings = {
   focus: number;
@@ -17,6 +18,8 @@ export type Settings = {
   ringtone: Ringtone;
   customRingtone?: string;
   customRingtones?: CustomRingtone[];
+  ringtoneFavorites?: string[];
+  recentRingtones?: string[];
   notifications: boolean;
   onboarded: boolean;
 };
@@ -108,6 +111,8 @@ export const defaults = (timezone = "Asia/Manila"): State => ({
     sound: false,
     ringtone: "classic",
     customRingtones: [],
+    ringtoneFavorites: [],
+    recentRingtones: [],
     notifications: false,
     onboarded: false,
   },

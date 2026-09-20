@@ -17,6 +17,7 @@ const customRingtoneItem = z.object({
   id: z.string().max(100),
   name: z.string().max(100),
   data: customRingtoneData,
+  duration: z.number().min(0).max(3600).optional(),
 });
 const customRingtone = customRingtoneData.optional();
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -73,6 +74,8 @@ const schema = z.object({
       .default("classic"),
     customRingtone,
     customRingtones: z.array(customRingtoneItem).max(50).optional().default([]),
+    ringtoneFavorites: z.array(z.string().max(100)).max(100).optional().default([]),
+    recentRingtones: z.array(z.string().max(100)).max(20).optional().default([]),
     notifications: z.boolean(),
     onboarded: z.boolean(),
   }),
