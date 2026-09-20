@@ -277,7 +277,7 @@ npm run desktop:package
 npm run desktop:installer
 ```
 
-The Windows installer will be generated in `dist/desktop-installer/Pacana-Setup.exe`.
+The Windows installer will be generated in `desktop-output/installer/Pacana-Setup.exe`.
 
 ---
 
