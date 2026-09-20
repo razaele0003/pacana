@@ -17,12 +17,18 @@ try {
   console.warn("Notice: could not copy optional squirrel node_modules, using desktop/squirrel-startup.cjs fallback", e.message);
 }
 
+const pkg = JSON.parse(
+  await (
+    await import("node:fs/promises")
+  ).readFile("package.json", "utf8"),
+);
+
 await writeFile(
   path.join(root, "package.json"),
   JSON.stringify({
     name: "pacana",
     productName: "Pacana",
-    version: "0.1.0",
+    version: pkg.version || "0.1.1",
     main: "desktop/main.cjs",
   }),
 );

@@ -700,11 +700,16 @@ select {
 .empty-rhythm button {
   font-size: 11px;
   margin-top: 18px;
-  padding: 8px 12px;
+  padding: 8px 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  line-height: 1;
+}
+.empty-rhythm button span {
+  display: inline-block;
+  line-height: 1;
 }
 .empty-rhythm button svg {
   margin: 0;

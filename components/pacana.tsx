@@ -1058,7 +1058,8 @@ export default function Pacana() {
                     <h3>A fresh little page.</h3>
                     <p>Your check-ins will find a home here.</p>
                     <button onClick={() => choose("Check-ins")}>
-                      Set your rhythm <ArrowRight size={15} />
+                      <span>Set your rhythm</span>
+                      <ArrowRight size={15} />
                     </button>
                   </div>
                 ) : (
