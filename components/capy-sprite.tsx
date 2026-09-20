@@ -109,13 +109,13 @@ const ANIMATION_SEQUENCES: Partial<Record<CapyPose, AnimationConfig>> = {
     loop: false,
   },
   shout: {
-    // 7 frames from microphone-sheet.png: walks to mic, sings with microphone, stops on frame 7
-    frames: Array.from({ length: 7 }, (_, i) => `/art/cappy/shout-${i + 1}.png`),
-    intervalMs: 125,
+    // 6 frames from alarm-sheet.png: synchronized with timer completion ringtone
+    frames: Array.from({ length: 6 }, (_, i) => `/art/cappy/alarm-${i + 1}.png`),
+    intervalMs: 170, // 150-200ms natural mouth movement pacing
     loop: false,
     spriteSheet: {
-      src: "/art/cappy/microphone-sheet.png",
-      frameCount: 7,
+      src: "/art/cappy/alarm-sheet.png",
+      frameCount: 6,
     },
   },
 };
@@ -139,7 +139,8 @@ const ALL_PRELOAD_IMAGES: string[] = [
   ...Array.from({ length: 10 }, (_, i) => `/art/cappy/sleep-${i + 1}.png`),
   ...Array.from({ length: 8 }, (_, i) => `/art/cappy/plant-${i + 1}.png`),
   ...Array.from({ length: 8 }, (_, i) => `/art/cappy/curious-${i + 1}.png`),
-  ...Array.from({ length: 7 }, (_, i) => `/art/cappy/shout-${i + 1}.png`),
+  ...Array.from({ length: 6 }, (_, i) => `/art/cappy/alarm-${i + 1}.png`),
+  "/art/cappy/alarm-sheet.png",
   "/art/cappy/microphone-sheet.png",
   "/art/cappy/rest.png",
   "/art/capy-drag.png",
@@ -276,44 +277,70 @@ export default function CapySprite({
       if (onFrameRef.current) onFrameRef.current(0);
     }, 0);
 
-    // Dedicated microphone animation for timer completion:
-    // Plays Frame 1 -> Frame 2 -> ... -> Frame 7 ONCE.
-    // Holds Frame 7 if audio is still playing.
-    // When audio finishes, completes animation and returns to normal behavior.
+    // Dedicated shouting / alarm animation synchronized with ringtone:
+    // 1. Immediately switch to Frame 2 (index 1: mouth opens)
+    // 2. While ringtone plays, loop Frames 2 -> 3 -> 4 -> 5 -> 2... (~170ms each)
+    // 3. Last ~500ms of ringtone: switch to Frame 6 (index 5) and hold
+    // 4. Ringtone ends: reset to Frame 1 (index 0) and return to normal/idle
     if (pose === "shout") {
-      let currentFrame = 0;
-      setFrameIdx(0);
-      if (onFrameRef.current) onFrameRef.current(0);
+      // Step 1: Immediately switch Cappy to Frame 2 (index 1)
+      setFrameIdx(1);
+      if (onFrameRef.current) onFrameRef.current(1);
+
+      const shoutLoopFrames = [1, 2, 3, 4]; // Frames 2, 3, 4, 5
+      let currentLoopIdx = 0;
+      let isFinalPose = false;
+
+      const finishAnimation = () => {
+        // Step 4: Reset animation back to Frame 1 (index 0) and complete
+        setFrameIdx(0);
+        if (onFrameRef.current) onFrameRef.current(0);
+        if (onAnimationCompleteRef.current) {
+          onAnimationCompleteRef.current();
+        }
+      };
 
       const frameInterval = setInterval(() => {
-        currentFrame += 1;
-        if (currentFrame >= 6) {
-          // Reached Frame 7 (index 6). Stop advancing!
-          clearInterval(frameInterval);
-          setFrameIdx(6);
-          if (onFrameRef.current) onFrameRef.current(6);
+        const now = Date.now();
+        const elapsed = now - soundStartTimeRef.current;
+        const totalDuration = soundDurationRef.current || 3000;
+        const remaining = totalDuration - elapsed;
 
-          const finishAnimation = () => {
-            if (onAnimationCompleteRef.current) {
-              onAnimationCompleteRef.current();
-            }
-          };
-
-          // If sound is already done or not playing, finish now.
-          // Otherwise, hold Frame 7 until audio finishes!
-          if (!isSoundPlayingRef.current) {
-            setTimeout(finishAnimation, 250);
-          } else {
-            soundEndedCallbacksRef.current.push(finishAnimation);
+        // Step 3: Last ~500ms of ringtone -> switch to Frame 6 (index 5) and hold
+        if (remaining <= 500 && isSoundPlayingRef.current) {
+          if (!isFinalPose) {
+            isFinalPose = true;
+            setFrameIdx(5); // Frame 6
+            if (onFrameRef.current) onFrameRef.current(5);
           }
-        } else {
-          setFrameIdx(currentFrame);
-          if (onFrameRef.current) onFrameRef.current(currentFrame);
+          return;
         }
+
+        // If sound finished or duration expired, conclude animation
+        if (!isSoundPlayingRef.current || remaining <= 0) {
+          clearInterval(frameInterval);
+          finishAnimation();
+          return;
+        }
+
+        // Step 2: Loop Frames 2 -> 3 -> 4 -> 5 -> 2...
+        currentLoopIdx = (currentLoopIdx + 1) % shoutLoopFrames.length;
+        const nextFrame = shoutLoopFrames[currentLoopIdx];
+        setFrameIdx(nextFrame);
+        if (onFrameRef.current) onFrameRef.current(nextFrame);
       }, config.intervalMs);
+
+      const onSoundEnded = () => {
+        clearInterval(frameInterval);
+        finishAnimation();
+      };
+
+      soundEndedCallbacksRef.current.push(onSoundEnded);
 
       return () => {
         clearInterval(frameInterval);
+        const idx = soundEndedCallbacksRef.current.indexOf(onSoundEnded);
+        if (idx !== -1) soundEndedCallbacksRef.current.splice(idx, 1);
       };
     }
 

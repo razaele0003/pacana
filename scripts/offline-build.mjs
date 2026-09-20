@@ -11,7 +11,7 @@ async function walk(dir) {
   return result;
 }
 const files = (await walk(root)).filter(
-  (p) => /\.(js|css|woff2?|ttf|webp|svg)$/.test(p) && !p.endsWith("/sw.js"),
+  (p) => /\.(js|css|woff2?|ttf|webp|svg|png)$/.test(p) && !p.endsWith("/sw.js"),
 );
 const hash = createHash("sha256");
 for (const path of files) hash.update(await readFile(path));
