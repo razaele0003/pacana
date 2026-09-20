@@ -1,6 +1,14 @@
+# Robots.txt for Pacana (https://pacana.app)
+# Designed for 100% global discoverability across all search engines, AI answer engines, and platforms.
+
+# Universal Access
 User-agent: *
 Allow: /
 
+# ------------------------------------------------------------------------------
+# 1. AI Search & Answer Engines (AEO / GEO)
+# ------------------------------------------------------------------------------
+# OpenAI (ChatGPT, ChatGPT Search, SearchGPT)
 User-agent: GPTBot
 Allow: /
 
@@ -10,9 +18,11 @@ Allow: /
 User-agent: OAI-SearchBot
 Allow: /
 
+# Perplexity AI
 User-agent: PerplexityBot
 Allow: /
 
+# Anthropic (Claude & Claude Web Search)
 User-agent: ClaudeBot
 Allow: /
 
@@ -22,45 +32,58 @@ Allow: /
 User-agent: Claude-Web
 Allow: /
 
+# Google Gemini & Google AI Overviews
 User-agent: Google-Extended
 Allow: /
 
 User-agent: GoogleOther
 Allow: /
 
+# Microsoft Copilot
 User-agent: Bingbot
 Allow: /
 
 User-agent: msnbot
 Allow: /
 
+# Brave Leo / Brave AI
 User-agent: Bravebot
 Allow: /
 
+# You.com
 User-agent: YouBot
 Allow: /
 
+# Apple Intelligence & Siri
 User-agent: Applebot
 Allow: /
 
 User-agent: Applebot-Extended
 Allow: /
 
+# Meta AI
 User-agent: FacebookBot
 Allow: /
 
 User-agent: meta-externalagent
 Allow: /
 
+# Amazon Alexa / AI
 User-agent: Amazonbot
 Allow: /
 
+# Cohere AI
 User-agent: cohere-ai
 Allow: /
 
+# Diffbot
 User-agent: Diffbot
 Allow: /
 
+# ------------------------------------------------------------------------------
+# 2. Major Traditional Search Engines (SEO)
+# ------------------------------------------------------------------------------
+# Google
 User-agent: Googlebot
 Allow: /
 
@@ -70,18 +93,29 @@ Allow: /
 User-agent: Googlebot-Mobile
 Allow: /
 
+# Microsoft Bing & Yahoo
 User-agent: Slurp
 Allow: /
 
+# ------------------------------------------------------------------------------
+# 3. Privacy-Focused Search Engines
+# ------------------------------------------------------------------------------
+# DuckDuckGo
 User-agent: DuckDuckBot
 Allow: /
 
+# Qwant
 User-agent: Qwantify
 Allow: /
 
+# Kagi
 User-agent: KagiBot
 Allow: /
 
+# ------------------------------------------------------------------------------
+# 4. Regional Search Giants
+# ------------------------------------------------------------------------------
+# Baidu (China)
 User-agent: Baiduspider
 Allow: /
 
@@ -91,6 +125,7 @@ Allow: /
 User-agent: Baiduspider-mobile
 Allow: /
 
+# Yandex (Russia & Eastern Europe)
 User-agent: Yandex
 Allow: /
 
@@ -100,18 +135,24 @@ Allow: /
 User-agent: YandexImages
 Allow: /
 
+# Naver (South Korea)
 User-agent: Yeti
 Allow: /
 
+# Sogou (China)
 User-agent: Sogou web spider
 Allow: /
 
 User-agent: Sogou inst spider
 Allow: /
 
+# Seznam (Czech Republic)
 User-agent: SeznamBot
 Allow: /
 
+# ------------------------------------------------------------------------------
+# 5. Social & Discovery Platforms (Link Previews & Cards)
+# ------------------------------------------------------------------------------
 User-agent: Twitterbot
 Allow: /
 
@@ -130,4 +171,7 @@ Allow: /
 User-agent: Pinterestbot
 Allow: /
 
+# ------------------------------------------------------------------------------
+# Sitemap
+# ------------------------------------------------------------------------------
 Sitemap: https://pacana-three.vercel.app/sitemap.xml
