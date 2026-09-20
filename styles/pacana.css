@@ -1164,6 +1164,94 @@ progress::-webkit-progress-value {
 .file-button:focus-within {
   outline: 3px solid #ad7d37;
 }
+.ringtone-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.remove-active-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid #e2b3a3;
+  background: #fff4ed;
+  color: #9a4529;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 44px;
+  transition: all 0.18s ease;
+}
+.remove-active-btn:hover {
+  background: #fae4d7;
+  border-color: #d89b88;
+}
+.uploaded-ringtones-tray {
+  margin: 6px 0 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.uploaded-ringtones-tray .tray-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.uploaded-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.uploaded-chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 3px 6px 3px 10px;
+  gap: 6px;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+.uploaded-chip.is-selected {
+  border-color: var(--green-dark);
+  background: var(--sage);
+  font-weight: 600;
+}
+.uploaded-chip .chip-select-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  min-height: auto;
+  font-size: inherit;
+  font-weight: inherit;
+  color: var(--green-dark);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+.uploaded-chip .chip-remove-btn {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  min-height: auto;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: color 0.15s, background 0.15s;
+}
+.uploaded-chip .chip-remove-btn:hover {
+  color: #c94a4a;
+  background: rgba(201, 74, 74, 0.12);
+}
 .modal {
   width: min(530px, calc(100vw - 32px));
   max-height: 90vh;

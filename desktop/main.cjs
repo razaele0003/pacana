@@ -239,8 +239,12 @@ else {
           "audio/webm",
           "audio/aac",
           "audio/x-m4a",
+          "audio/x-wav",
+          "audio/mp3",
         ];
-        if (!allowedTypes.includes(type) && !type?.startsWith("audio/")) {
+        const allowedExts = [".mp3", ".wav", ".ogg", ".m4a", ".webm", ".aac", ".flac"];
+        const fileExt = path.extname(name || "").toLowerCase();
+        if (!allowedTypes.includes(type) && !type?.startsWith("audio/") && !allowedExts.includes(fileExt)) {
           throw new Error("Invalid audio file type. Please choose an MP3, WAV, OGG, or M4A file.");
         }
 

@@ -1,5 +1,10 @@
 import type { Ringtone } from "./ringtones";
 export type Phase = "focus" | "short" | "long";
+export type CustomRingtone = {
+  id: string;
+  name: string;
+  data: string;
+};
 export type Settings = {
   focus: number;
   short: number;
@@ -11,6 +16,7 @@ export type Settings = {
   sound: boolean;
   ringtone: Ringtone;
   customRingtone?: string;
+  customRingtones?: CustomRingtone[];
   notifications: boolean;
   onboarded: boolean;
 };
@@ -101,6 +107,7 @@ export const defaults = (timezone = "Asia/Manila"): State => ({
     timezone,
     sound: false,
     ringtone: "classic",
+    customRingtones: [],
     notifications: false,
     onboarded: false,
   },

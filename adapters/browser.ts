@@ -114,10 +114,14 @@ async function playRingtone(settings: Settings) {
   }
   playing = [];
 
-  if (settings.ringtone === "custom") {
-    if (!settings.customRingtone)
+  if (settings.ringtone === "custom" || settings.ringtone.startsWith("custom-")) {
+    const customItem = settings.customRingtones?.find(
+      (r) => r.id === settings.ringtone,
+    );
+    const audioSource = customItem?.data || settings.customRingtone;
+    if (!audioSource)
       throw new Error("Upload a custom ringtone first.");
-    return await playAudioFile(settings.customRingtone);
+    return await playAudioFile(audioSource);
   }
 
   const chosen =

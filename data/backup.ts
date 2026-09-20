@@ -7,13 +7,18 @@ const photo = z
   .max(1500000)
   .regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/)
   .optional();
-const customRingtone = z
+const customRingtoneData = z
   .string()
   .max(8000000)
   .regex(
-    /^data:audio\/(?:mpeg|wav|ogg|mp4|webm|x-m4a);base64,[A-Za-z0-9+/]+={0,2}$/,
-  )
-  .optional();
+    /^(?:data:audio\/(?:mpeg|wav|ogg|mp4|webm|x-m4a|aac|flac|mp3|x-wav);base64,[A-Za-z0-9+/]+={0,2}|pacana:\/\/app\/audio\/[a-zA-Z0-9_\-\.]+)$/,
+  );
+const customRingtoneItem = z.object({
+  id: z.string().max(100),
+  name: z.string().max(100),
+  data: customRingtoneData,
+});
+const customRingtone = customRingtoneData.optional();
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const timezone = z.string().refine((v) => {
   try {
@@ -48,19 +53,26 @@ const schema = z.object({
     timezone,
     sound: z.boolean(),
     ringtone: z
-      .enum([
-        "classic",
-        "woodland",
-        "raindrop",
-        "sunrise",
-        "bright-bell",
-        "morning-call",
-        "focus-alarm",
-        "ulah-oscar",
-        "custom",
-      ])
+      .string()
+      .max(100)
+      .refine(
+        (v) =>
+          [
+            "classic",
+            "woodland",
+            "raindrop",
+            "sunrise",
+            "bright-bell",
+            "morning-call",
+            "focus-alarm",
+            "ulah-oscar",
+            "custom",
+          ].includes(v) || v.startsWith("custom-"),
+        "Invalid ringtone",
+      )
       .default("classic"),
     customRingtone,
+    customRingtones: z.array(customRingtoneItem).max(50).optional().default([]),
     notifications: z.boolean(),
     onboarded: z.boolean(),
   }),

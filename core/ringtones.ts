@@ -70,4 +70,4 @@ export const ringtones = [
     file: "/sounds/ulah-oscar.mp3",
   },
 ] as const;
-export type Ringtone = (typeof ringtones)[number]["id"] | "custom";
+export type Ringtone = (typeof ringtones)[number]["id"] | "custom" | (string & {});

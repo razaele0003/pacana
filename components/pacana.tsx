@@ -934,8 +934,13 @@ export default function Pacana() {
                       }
                       onClick={async () => {
                         const sound = !state.settings.sound;
-                        if (sound)
-                          await unlockAudio(state.settings.customRingtone);
+                        if (sound) {
+                          const activeCustom =
+                            state.settings.customRingtones?.find(
+                              (r) => r.id === state.settings.ringtone,
+                            )?.data || state.settings.customRingtone;
+                          await unlockAudio(activeCustom);
+                        }
                         if (
                           await update((s) => {
                             s.settings.sound = sound;
@@ -2122,7 +2127,13 @@ function Preferences({
               checked={state.settings.sound}
               onChange={async (e) => {
                 const sound = e.target.checked;
-                if (sound) await unlockAudio(state.settings.customRingtone);
+                if (sound) {
+                  const activeCustom =
+                    state.settings.customRingtones?.find(
+                      (r) => r.id === state.settings.ringtone,
+                    )?.data || state.settings.customRingtone;
+                  await unlockAudio(activeCustom);
+                }
                 if (
                   await update((s) => {
                     s.settings.sound = sound;
@@ -2142,120 +2153,234 @@ function Preferences({
             />{" "}
             Play a chime for check-ins
           </label>
-          <label className="field">
-            Ringtone
-            <select
-              value={state.settings.ringtone}
-              onChange={(e) => {
-                const ringtone = e.target.value as Ringtone;
-                void update((s) => {
-                  s.settings.ringtone = ringtone;
-                });
-              }}
-            >
-              {ringtones.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-              <option value="custom">My uploaded audio</option>
-            </select>
-          </label>
-          <button
-            onClick={async () => {
-              try {
-                await previewRingtone(state.settings);
-              } catch (err) {
-                setError(
-                  (err as Error)?.message ||
-                    "Sound could not play. Check your browser audio permissions and device volume.",
-                );
-              }
-            }}
-          >
-            <Volume2 size={17} /> Preview ringtone
-          </button>
-          <label className="file-button">
-            <Music size={17} /> Upload audio ringtone
-            <input
-              type="file"
-              accept="audio/mpeg,audio/wav,audio/ogg,audio/mp4,audio/webm,.mp3,.wav,.ogg,.m4a,.webm"
-              onChange={async (e) => {
-                try {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  if (
-                    !file.type.startsWith("audio/") ||
-                    file.size > 5 * 1024 * 1024
-                  )
-                    throw new Error("Choose an audio file under 5 MB.");
+          {(() => {
+            const customList = [
+              ...(state.settings.customRingtones || []),
+              ...(state.settings.customRingtone &&
+              !state.settings.customRingtones?.some((r) => r.id === "custom")
+                ? [
+                    {
+                      id: "custom",
+                      name: "My uploaded audio",
+                      data: state.settings.customRingtone,
+                    },
+                  ]
+                : []),
+            ];
+            const isCustomActive =
+              state.settings.ringtone === "custom" ||
+              state.settings.ringtone.startsWith("custom-");
 
-                  let customRingtone: string;
-                  if (
-                    typeof window !== "undefined" &&
-                    (window as any).pacanaDesktop?.saveAudio
-                  ) {
-                    const buffer = await file.arrayBuffer();
-                    const saved = await (window as any).pacanaDesktop.saveAudio(
-                      file.name,
-                      buffer,
-                      file.type,
-                    );
-                    customRingtone =
-                      typeof saved === "string" ? saved : saved?.url || "";
-                  } else {
-                    customRingtone = await readAsDataUrl(file);
-                  }
+            return (
+              <>
+                <label className="field">
+                  Ringtone
+                  <select
+                    value={state.settings.ringtone}
+                    onChange={(e) => {
+                      const ringtone = e.target.value as Ringtone;
+                      void update((s) => {
+                        s.settings.ringtone = ringtone;
+                      });
+                    }}
+                  >
+                    <optgroup label="Built-in Ringtones">
+                      {ringtones.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    {customList.length > 0 && (
+                      <optgroup label="Uploaded Ringtones">
+                        {customList.map((cr) => (
+                          <option key={cr.id} value={cr.id}>
+                            🎵 {cr.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                </label>
+                {customList.length > 0 && (
+                  <div className="uploaded-ringtones-tray">
+                    <span className="tray-label">
+                      Uploaded ringtones ({customList.length}):
+                    </span>
+                    <div className="uploaded-chips">
+                      {customList.map((cr) => {
+                        const isSelected = state.settings.ringtone === cr.id;
+                        return (
+                          <div
+                            key={cr.id}
+                            className={`uploaded-chip ${isSelected ? "is-selected" : ""}`}
+                          >
+                            <button
+                              type="button"
+                              className="chip-select-btn"
+                              title={`Select "${cr.name}"`}
+                              onClick={() => {
+                                void update((s) => {
+                                  s.settings.ringtone = cr.id;
+                                });
+                              }}
+                            >
+                              <Music size={12} />
+                              <span>{cr.name}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="chip-remove-btn"
+                              title={`Delete "${cr.name}"`}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const oldUrl = cr.data;
+                                if (
+                                  oldUrl &&
+                                  oldUrl.startsWith("pacana://app/audio/") &&
+                                  typeof window !== "undefined" &&
+                                  (window as any).pacanaDesktop?.deleteAudio
+                                ) {
+                                  const id = oldUrl.replace(
+                                    "pacana://app/audio/",
+                                    "",
+                                  );
+                                  await (window as any).pacanaDesktop
+                                    .deleteAudio(id)
+                                    .catch(() => {});
+                                }
+                                await update((s) => {
+                                  s.settings.customRingtones = (
+                                    s.settings.customRingtones || []
+                                  ).filter((r) => r.id !== cr.id);
+                                  if (
+                                    s.settings.customRingtone &&
+                                    cr.id === "custom"
+                                  ) {
+                                    delete s.settings.customRingtone;
+                                  }
+                                  if (s.settings.ringtone === cr.id) {
+                                    s.settings.ringtone = "classic";
+                                  }
+                                });
+                              }}
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                <div className="ringtone-actions">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await previewRingtone(state.settings);
+                      } catch (err) {
+                        setError(
+                          (err as Error)?.message ||
+                            "Sound could not play. Check your browser audio permissions and device volume.",
+                        );
+                      }
+                    }}
+                  >
+                    <Volume2 size={17} /> Preview ringtone
+                  </button>
+                  <label className="file-button">
+                    <Music size={17} /> Upload audio ringtone
+                    <input
+                      type="file"
+                      accept="audio/mpeg,audio/wav,audio/ogg,audio/mp4,audio/webm,.mp3,.wav,.ogg,.m4a,.webm,.aac,.flac"
+                      onChange={async (e) => {
+                        try {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
 
-                  if (
-                    await update((s) => {
-                      s.settings.ringtone = "custom";
-                      s.settings.customRingtone = customRingtone;
-                      s.settings.sound = true;
-                    })
-                  ) {
-                    await previewRingtone({
-                      ...state.settings,
-                      ringtone: "custom",
-                      customRingtone,
-                      sound: true,
-                    });
-                    setNotice(
-                      "Your custom ringtone is saved and ready for timer completion.",
-                    );
-                  }
-                } catch (error) {
-                  setError((error as Error).message);
-                }
-                e.target.value = "";
-              }}
-            />
-          </label>
-          {state.settings.customRingtone && (
-            <button
-              className="text-link"
-              onClick={async () => {
-                const oldUrl = state.settings.customRingtone;
-                if (
-                  oldUrl &&
-                  oldUrl.startsWith("pacana://app/audio/") &&
-                  typeof window !== "undefined" &&
-                  (window as any).pacanaDesktop?.deleteAudio
-                ) {
-                  const id = oldUrl.replace("pacana://app/audio/", "");
-                  await (window as any).pacanaDesktop
-                    .deleteAudio(id)
-                    .catch(() => {});
-                }
-                void update((s) => {
-                  delete s.settings.customRingtone;
-                  s.settings.ringtone = "classic";
-                });
-              }}
-            >
-              Remove uploaded ringtone
-            </button>
-          )}
+                          const isAudio =
+                            file.type.startsWith("audio/") ||
+                            /\.(mp3|wav|ogg|m4a|aac|webm|flac)$/i.test(
+                              file.name,
+                            );
+
+                          if (!isAudio || file.size > 5 * 1024 * 1024)
+                            throw new Error(
+                              "Choose an audio file (MP3, WAV, OGG, or M4A) under 5 MB.",
+                            );
+
+                          const dataUrl = await readAsDataUrl(file);
+                          const cleanName =
+                            file.name.replace(/\.[^/.]+$/, "").slice(0, 30) ||
+                            "Uploaded sound";
+                          const newId = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                          const newEntry = {
+                            id: newId,
+                            name: cleanName,
+                            data: dataUrl,
+                          };
+
+                          if (
+                            await update((s) => {
+                              const existing = s.settings.customRingtones || [];
+                              s.settings.customRingtones = [
+                                ...existing,
+                                newEntry,
+                              ];
+                              s.settings.ringtone = newId;
+                              s.settings.sound = true;
+                            })
+                          ) {
+                            await previewRingtone({
+                              ...state.settings,
+                              ringtone: newId,
+                              customRingtones: [
+                                ...(state.settings.customRingtones || []),
+                                newEntry,
+                              ],
+                              sound: true,
+                            });
+                            setNotice(
+                              `"${cleanName}" uploaded and added to your ringtones.`,
+                            );
+                          }
+                        } catch (error) {
+                          setError((error as Error).message);
+                        } finally {
+                          e.target.value = "";
+                        }
+                      }}
+                    />
+                  </label>
+                  {isCustomActive && (
+                    <button
+                      type="button"
+                      className="remove-active-btn"
+                      title="Remove currently selected uploaded ringtone"
+                      onClick={async () => {
+                        const activeId = state.settings.ringtone;
+                        await update((s) => {
+                          s.settings.customRingtones = (
+                            s.settings.customRingtones || []
+                          ).filter((r) => r.id !== activeId);
+                          if (
+                            s.settings.customRingtone &&
+                            activeId === "custom"
+                          ) {
+                            delete s.settings.customRingtone;
+                          }
+                          s.settings.ringtone = "classic";
+                        });
+                      }}
+                    >
+                      <X size={15} /> Remove active
+                    </button>
+                  )}
+                </div>
+              </>
+            );
+          })()}
           <p className="muted">
             Focus and break endings always play this ringtone. Enable check-in
             sounds if you also want a chime when an accountability prompt is

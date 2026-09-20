@@ -80,6 +80,18 @@ test("custom ringtones validate and preserve through backup", () => {
   assert.equal(parseBackup(structuredClone(state)).settings.ringtone, "custom");
   state.settings.customRingtone = "data:text/plain;base64,AA==";
   assert.throws(() => parseBackup(state));
+
+  // Test multiple custom ringtones array and desktop pacana:// audio URL support
+  const multiState = defaults();
+  multiState.settings.ringtone = "custom-1";
+  multiState.settings.customRingtones = [
+    { id: "custom-1", name: "Chime 1", data: "data:audio/wav;base64,AA==" },
+    { id: "custom-2", name: "Desktop Sound", data: "pacana://app/audio/ringtone-123.mp3" },
+  ];
+  const parsed = parseBackup(structuredClone(multiState));
+  assert.equal(parsed.settings.ringtone, "custom-1");
+  assert.equal(parsed.settings.customRingtones?.length, 2);
+  assert.equal(parsed.settings.customRingtones?.[1].data, "pacana://app/audio/ringtone-123.mp3");
 });
 test("deleting records and clearing a journal day preserves focus progress", () => {
   const state = defaults("UTC");
