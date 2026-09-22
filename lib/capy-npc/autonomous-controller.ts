@@ -115,10 +115,38 @@ export function useAutonomousCapy({
   const isEmoteActiveRef = useRef<boolean>(false);
   const pausedWaypointsRef = useRef<Point[]>([]);
   const treeGrowthTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const dynamicTargetRef = useRef<Point | HTMLElement | string | (() => Point | null) | null>(null);
+
+  const resolveTargetPoint = useCallback(
+    (t: Point | HTMLElement | string | (() => Point | null) | null): Point | null => {
+      if (!t) return null;
+      if (typeof t === "function") {
+        return t();
+      }
+      if (typeof t === "object" && "x" in t && "y" in t) {
+        return t;
+      }
+      const el =
+        typeof t === "string"
+          ? (document.querySelector(t) as HTMLElement | null)
+          : (t as HTMLElement | null);
+      if (!el) return null;
+      const cr = el.getBoundingClientRect();
+      return {
+        x: Math.max(8, cr.left + (cr.width - 76) / 2),
+        y: Math.max(8, cr.top + (cr.height - 76) / 2),
+      };
+    },
+    []
+  );
 
   const changeMode = useCallback((newMode: CompanionMode) => {
     modeRef.current = newMode;
     setMode(newMode);
+
+    if (newMode !== "walk_home" && newMode !== "eating") {
+      dynamicTargetRef.current = null;
+    }
 
     if (typeof window !== "undefined") {
       window.dispatchEvent(
@@ -461,9 +489,13 @@ export function useAutonomousCapy({
     [refreshObstacles, changeMode]
   );
 
-  // Steer autonomously to a specific point (e.g. walking home to the cushion)
+  // Steer autonomously to a specific point or dynamic target (e.g. walking home to the cushion/tree)
   const walkToPoint = useCallback(
-    (target: Point, onArrived?: () => void) => {
+    (
+      target: Point | HTMLElement | string | (() => Point | null),
+      onArrived?: () => void,
+      targetElement?: HTMLElement | string | (() => Point | null)
+    ) => {
       if (transitionTimerRef.current) {
         clearTimeout(transitionTimerRef.current);
         transitionTimerRef.current = null;
@@ -474,7 +506,30 @@ export function useAutonomousCapy({
       refreshObstacles();
       const current = posRef.current;
 
-      const path: Point[] = [target];
+      let initialPoint: Point | null = null;
+      let dynamicTarget: Point | HTMLElement | string | (() => Point | null) | null = null;
+
+      if (targetElement) {
+        dynamicTarget = targetElement;
+      }
+
+      if (
+        typeof target === "string" ||
+        (typeof HTMLElement !== "undefined" && target instanceof HTMLElement) ||
+        typeof target === "function"
+      ) {
+        dynamicTarget = target;
+        initialPoint = resolveTargetPoint(target);
+      } else if (typeof target === "object" && target !== null && "x" in target && "y" in target) {
+        initialPoint = target as Point;
+      }
+
+      if (!initialPoint) {
+        initialPoint = current;
+      }
+
+      dynamicTargetRef.current = dynamicTarget;
+      const path: Point[] = [initialPoint];
 
       waypointsRef.current = path;
       currentGoalRef.current = "go_home";
@@ -488,7 +543,7 @@ export function useAutonomousCapy({
         }
       }
     },
-    [refreshObstacles, changeMode]
+    [refreshObstacles, changeMode, resolveTargetPoint]
   );
 
   // Focus Button Interaction Sequence
@@ -1293,6 +1348,14 @@ export function useAutonomousCapy({
         waypointsRef.current.length > 0 &&
         !isDraggingRef.current
       ) {
+        // Dynamically pursue target (like cushion/tree) so Cappy follows it even when the user scrolls up or down
+        if (dynamicTargetRef.current && currentMode === "walk_home") {
+          const livePoint = resolveTargetPoint(dynamicTargetRef.current);
+          if (livePoint) {
+            waypointsRef.current = [livePoint];
+          }
+        }
+
         const nextTarget = waypointsRef.current[0];
         const targetX = Math.max(minX, Math.min(maxX, nextTarget.x));
         const targetY = Math.max(minY, Math.min(maxY, nextTarget.y));
@@ -1321,7 +1384,14 @@ export function useAutonomousCapy({
         const arrivalThreshold =
           currentMode === "walk_to_snack" ? 32 : currentMode === "walk_to_focus" ? 20 : 12;
 
-        if (dist <= Math.max(stepDist, arrivalThreshold)) {
+        // For walk_home, calculate actual distance to the target (even if target is scrolled outside viewport)
+        // This prevents Cappy from prematurely finishing arrival if the target is currently scrolled off-screen
+        const actualTargetDist =
+          currentMode === "walk_home"
+            ? Math.hypot(nextTarget.x - cur.x, nextTarget.y - cur.y)
+            : dist;
+
+        if (actualTargetDist <= Math.max(stepDist, arrivalThreshold)) {
           // Reached this waypoint
           const reached: Point = {
             x: targetX,
@@ -1420,6 +1490,16 @@ export function useAutonomousCapy({
           posRef.current = nextPos;
           setPos(nextPos);
           if (onPosChange) onPosChange(nextPos);
+        }
+      }
+
+      // While eating at the tree, dynamically follow the tree if the user scrolls
+      if (dynamicTargetRef.current && currentMode === "eating" && !isDraggingRef.current) {
+        const livePoint = resolveTargetPoint(dynamicTargetRef.current);
+        if (livePoint) {
+          posRef.current = livePoint;
+          setPos(livePoint);
+          if (onPosChange) onPosChange(livePoint);
         }
       }
 

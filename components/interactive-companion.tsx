@@ -7,6 +7,7 @@ import CapyEmoteBubble from "./capy-emote-bubble";
 import CapyMenu from "./capy-menu";
 import { playCompanionSound } from "../lib/companion-sound";
 import { useAutonomousCapy, EmoteType } from "../lib/capy-npc/autonomous-controller";
+import type { Point } from "../lib/capy-npc/obstacle-manager";
 import { Home, Move } from "lucide-react";
 
 interface InteractiveCompanionProps {
@@ -353,25 +354,31 @@ export default function InteractiveCompanion({
         !!document.querySelector(".empty-cushion");
 
       const navigateToCushionAndEat = () => {
-        const cushionEl =
-          document.querySelector(".docked-companion-empty") ||
-          document.querySelector(".empty-cushion");
-        const cr = cushionEl?.getBoundingClientRect();
-        const targetPos = cr
-          ? {
-              x: Math.max(8, cr.left + (cr.width - 76) / 2),
-              y: Math.max(8, cr.top + (cr.height - 76) / 2),
-            }
-          : {
-              x: Math.max(
-                50,
-                (typeof window !== "undefined" ? window.innerWidth : 1200) - 200
-              ),
-              y: 350,
+        const getHomeTarget = (): Point | null => {
+          // 1. Stage container where Cappy sits when docked and where the tree grows
+          const stageEl = document.querySelector(".docked-companion-stage") as HTMLElement | null;
+          if (stageEl) {
+            const sr = stageEl.getBoundingClientRect();
+            return {
+              x: Math.max(8, sr.left + (sr.width - 76) / 2),
+              y: Math.max(8, sr.top + (sr.height - 76) / 2),
             };
+          }
+          // 2. Empty cushion / tree wrapper fallback
+          const cushionEl = (document.querySelector(".cushion-seed-wrapper") ||
+            document.querySelector(".empty-cushion")) as HTMLElement | null;
+          if (cushionEl) {
+            const cr = cushionEl.getBoundingClientRect();
+            return {
+              x: Math.max(8, cr.left + (cr.width - 76) / 2),
+              y: Math.max(8, cr.top + (cr.height - 76) / 2 - 16),
+            };
+          }
+          return null;
+        };
 
-        // Cappy physically moves across the screen towards the home cushion
-        npc.walkToPoint(targetPos, () => {
+        // Cappy physically moves across the screen pursuing the tree/cushion dynamically even as user scrolls
+        npc.walkToPoint(getHomeTarget, () => {
           // Tree is guaranteed to be fully grown when Cappy gets to the tree!
           if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
           updateCushionSeed("ready", 10);
