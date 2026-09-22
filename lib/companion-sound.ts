@@ -454,3 +454,23 @@ export function playBreakdanceCelebration(
     return null;
   }
 }
+
+/**
+ * Stop any ongoing breakdance celebration playback immediately.
+ */
+export function stopBreakdanceCelebration(): void {
+  if (currentSourceNode) {
+    try {
+      currentSourceNode.stop();
+      currentSourceNode.disconnect();
+    } catch {}
+    currentSourceNode = null;
+  }
+  if (currentCelebrationAudio) {
+    try {
+      currentCelebrationAudio.pause();
+      currentCelebrationAudio.currentTime = 0;
+    } catch {}
+    currentCelebrationAudio = null;
+  }
+}

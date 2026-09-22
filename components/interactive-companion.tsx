@@ -5,7 +5,7 @@ import CapySprite, { CapyPose } from "./capy-sprite";
 import CapyLeaf from "./capy-leaf";
 import CapyEmoteBubble from "./capy-emote-bubble";
 import CapyMenu from "./capy-menu";
-import { playCompanionSound } from "../lib/companion-sound";
+import { playCompanionSound, stopBreakdanceCelebration } from "../lib/companion-sound";
 import { useAutonomousCapy, EmoteType } from "../lib/capy-npc/autonomous-controller";
 import type { Point } from "../lib/capy-npc/obstacle-manager";
 import { Home, Move } from "lucide-react";
@@ -365,6 +365,10 @@ export default function InteractiveCompanion({
 
       if (npc.mode === "resting") {
         npc.wakeUp();
+      }
+
+      if (npc.mode === "celebrating" || npc.pose === "celebrating") {
+        stopBreakdanceCelebration();
       }
 
       const focusTabBtn =

@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { CapyPose } from "../../components/capy-sprite";
-import { playCompanionSound, playBreakdanceCelebration } from "../companion-sound";
+import {
+  playCompanionSound,
+  playBreakdanceCelebration,
+  stopBreakdanceCelebration,
+} from "../companion-sound";
 import {
   Point,
   Rect,
@@ -145,6 +149,9 @@ export function useAutonomousCapy({
   );
 
   const changeMode = useCallback((newMode: CompanionMode) => {
+    if (modeRef.current === "celebrating" && newMode !== "celebrating") {
+      stopBreakdanceCelebration();
+    }
     modeRef.current = newMode;
     setMode(newMode);
 
@@ -303,6 +310,17 @@ export function useAutonomousCapy({
       if (type === "dance" || type === "celebrating") {
         triggerCelebration();
         return;
+      }
+
+      // If dancing, allow any new emote to interrupt the dance and stop the music immediately!
+      if (modeRef.current === "celebrating" || temporaryActionRef.current === "celebrating") {
+        stopBreakdanceCelebration();
+        if (emoteTimerRef.current) {
+          clearTimeout(emoteTimerRef.current);
+          emoteTimerRef.current = null;
+        }
+        isEmoteActiveRef.current = false;
+        temporaryActionRef.current = null;
       }
 
       if (
@@ -1692,12 +1710,20 @@ export function useAutonomousCapy({
         clearTimeout(actionTimeoutRef.current);
         actionTimeoutRef.current = null;
       }
+      stopBreakdanceCelebration();
     };
   }, [enabled, planNextWander]);
 
   // Drag hooks
   const startDrag = useCallback((startClientPos: Point) => {
     isDraggingRef.current = true;
+    if (modeRef.current === "celebrating" || temporaryActionRef.current === "celebrating") {
+      stopBreakdanceCelebration();
+    }
+    if (emoteTimerRef.current) {
+      clearTimeout(emoteTimerRef.current);
+      emoteTimerRef.current = null;
+    }
     if (transitionTimerRef.current) {
       clearTimeout(transitionTimerRef.current);
       transitionTimerRef.current = null;
