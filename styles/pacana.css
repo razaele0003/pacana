@@ -486,6 +486,10 @@ select {
   color: #493a2b;
   margin: 8px 0 6px;
   font-variant-numeric: tabular-nums;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  cursor: default;
 }
 .timer-caption {
   font-size: 12px;
@@ -1978,6 +1982,14 @@ progress::-webkit-progress-value {
   justify-content: center;
   max-width: 1100px;
   width: 100%;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+.digital-clock * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
 }
 .clock-section {
   position: relative;
@@ -1996,7 +2008,10 @@ progress::-webkit-progress-value {
   width: clamp(50px, 11vw, 152px);
   height: clamp(86px, 16.5vw, 216px);
   perspective: 800px;
+  -webkit-user-select: none;
+  -moz-user-select: none;
   user-select: none;
+  cursor: default;
 }
 
 /* Scoreboard Top Binder Rings */
@@ -2089,6 +2104,10 @@ progress::-webkit-progress-value {
   font-weight: 900;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  cursor: default;
 }
 .scoreboard-half-top .scoreboard-digit-val,
 .scoreboard-flap-top .scoreboard-digit-val {
@@ -2258,6 +2277,10 @@ progress::-webkit-progress-value {
   text-transform: uppercase;
   color: #b9c9ac;
   text-align: center;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  cursor: default;
 }
 .clock-colon {
   position: absolute;
@@ -2267,6 +2290,10 @@ progress::-webkit-progress-value {
   font-size: clamp(35px, 7vw, 84px);
   line-height: 1;
   color: #a8ba92;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  cursor: default;
 }
 .fullscreen-task {
   color: #c8d3bb;
@@ -3730,13 +3757,25 @@ body.is-desktop span {
   user-select: text;
 }
 
-/* Re-apply no-select to buttons and badges even if inside text */
+/* Re-apply no-select to buttons, badges, and timer display even if inside text */
 body.is-desktop button,
 body.is-desktop .badge,
 body.is-desktop .level-chip,
-body.is-desktop .nav-item {
-  -webkit-user-select: none;
-  user-select: none;
+body.is-desktop .nav-item,
+body.is-desktop .digital-clock,
+body.is-desktop .digital-clock *,
+body.is-desktop .scoreboard-tile,
+body.is-desktop .scoreboard-card,
+body.is-desktop .scoreboard-digit-val,
+body.is-desktop .scoreboard-half,
+body.is-desktop .scoreboard-flap,
+body.is-desktop .clock-unit,
+body.is-desktop .clock-colon,
+body.is-desktop .timer-digits,
+body.is-desktop .session-label {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  cursor: default;
 }
 
 /* Prevent browser ghost image dragging */
