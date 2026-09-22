@@ -28,7 +28,7 @@ await writeFile(
   JSON.stringify({
     name: "pacana",
     productName: "Pacana",
-    version: pkg.version || "0.1.1",
+    version: pkg.version || "0.1.3",
     main: "desktop/main.cjs",
   }),
 );

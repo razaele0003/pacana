@@ -107,6 +107,7 @@ export function useAutonomousCapy({
   const sleepTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastMovedPosRef = useRef<Point>({ x: 0, y: 0 });
   const stalledFramesCountRef = useRef<number>(0);
+  const lastMovementOrActionTimeRef = useRef<number>(0);
   const resumeGoalRef = useRef<() => void>(() => {});
 
   const currentGoalRef = useRef<CapyGoalType>("wander");
@@ -672,9 +673,9 @@ export function useAutonomousCapy({
     currentGoalRef.current = "wander";
     changeMode("wander");
     setPose("walk");
-    if (waypointsRef.current.length === 0) {
-      planNextWander();
-    }
+    waypointsRef.current = [];
+    pausedWaypointsRef.current = [];
+    planNextWander();
   }, [startApproachingReadyLeaf, startPressFocus, planNextWander, changeMode]);
 
   resumeGoalRef.current = resumeGoal;
@@ -1287,7 +1288,11 @@ export function useAutonomousCapy({
           cur.x - lastMovedPosRef.current.x,
           cur.y - lastMovedPosRef.current.y
         );
-        if (movedDist < 2) {
+        if (movedDist >= 1.5) {
+          lastMovementOrActionTimeRef.current = time;
+          lastMovedPosRef.current = { x: cur.x, y: cur.y };
+          stalledFramesCountRef.current = 0;
+        } else {
           stalledFramesCountRef.current++;
           if (stalledFramesCountRef.current >= 75) {
             stalledFramesCountRef.current = 0;
@@ -1331,12 +1336,10 @@ export function useAutonomousCapy({
               }
             } else {
               waypointsRef.current = [];
-              planNextWander();
+              const preferredSide = cur.x > vp.width * 0.5 ? "left" : "right";
+              planNextWander(preferredSide);
             }
           }
-        } else {
-          lastMovedPosRef.current = { x: cur.x, y: cur.y };
-          stalledFramesCountRef.current = 0;
         }
       } else {
         lastMovedPosRef.current = { x: cur.x, y: cur.y };
@@ -1458,7 +1461,7 @@ export function useAutonomousCapy({
                   if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current);
                   sleepTimerRef.current = setTimeout(() => {
                     sleepTimerRef.current = null;
-                    if (modeRef.current === "resting") {
+                    if (modeRef.current === "resting" && currentGoalRef.current !== "rest") {
                       wakeUp();
                     }
                   }, 3200);
@@ -1503,7 +1506,7 @@ export function useAutonomousCapy({
         }
       }
 
-      // Safety watchdog: If in any walking/idle mode with no waypoints and no active timers, resume roaming
+      // Safety watchdog 1: If in any walking/idle mode with no waypoints and no active timers, resume roaming
       if (
         (currentMode === "wander" ||
           currentMode === "idle" ||
@@ -1532,6 +1535,53 @@ export function useAutonomousCapy({
         }, 400);
       }
 
+      // Safety watchdog 2: Universal anti-freeze watchdog
+      // Guarantees Cappy NEVER stays permanently stuck or frozen in ANY mode or position
+      const timeSinceLastMove = time - (lastMovementOrActionTimeRef.current || time);
+      const isUserResting = currentGoalRef.current === "rest";
+      const isShouting = currentMode === "shouting";
+
+      if (
+        !isDraggingRef.current &&
+        !isUserResting &&
+        !isShouting &&
+        lastMovementOrActionTimeRef.current > 0 &&
+        timeSinceLastMove > 5000
+      ) {
+        lastMovementOrActionTimeRef.current = time;
+
+        if (transitionTimerRef.current) {
+          clearTimeout(transitionTimerRef.current);
+          transitionTimerRef.current = null;
+        }
+        if (emoteTimerRef.current) {
+          clearTimeout(emoteTimerRef.current);
+          emoteTimerRef.current = null;
+        }
+        if (sleepTimerRef.current) {
+          clearTimeout(sleepTimerRef.current);
+          sleepTimerRef.current = null;
+        }
+        if (actionTimeoutRef.current) {
+          clearTimeout(actionTimeoutRef.current);
+          actionTimeoutRef.current = null;
+        }
+
+        isEmoteActiveRef.current = false;
+        temporaryActionRef.current = null;
+        setActiveEmote(null);
+        setShowHearts(false);
+
+        waypointsRef.current = [];
+        pausedWaypointsRef.current = [];
+        stalledFramesCountRef.current = 0;
+        lastMovedPosRef.current = { x: cur.x, y: cur.y };
+        currentGoalRef.current = "wander";
+        changeMode("wander");
+        setPose("walk");
+        planNextWander();
+      }
+
       animFrameId = requestAnimationFrame(tick);
     };
 
@@ -1555,9 +1605,26 @@ export function useAutonomousCapy({
 
     return () => {
       clearTimeout(startTimeout);
-      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-      if (emoteTimerRef.current) clearTimeout(emoteTimerRef.current);
-      if (treeGrowthTimerRef.current) clearInterval(treeGrowthTimerRef.current);
+      if (transitionTimerRef.current) {
+        clearTimeout(transitionTimerRef.current);
+        transitionTimerRef.current = null;
+      }
+      if (emoteTimerRef.current) {
+        clearTimeout(emoteTimerRef.current);
+        emoteTimerRef.current = null;
+      }
+      if (treeGrowthTimerRef.current) {
+        clearInterval(treeGrowthTimerRef.current);
+        treeGrowthTimerRef.current = null;
+      }
+      if (sleepTimerRef.current) {
+        clearTimeout(sleepTimerRef.current);
+        sleepTimerRef.current = null;
+      }
+      if (actionTimeoutRef.current) {
+        clearTimeout(actionTimeoutRef.current);
+        actionTimeoutRef.current = null;
+      }
     };
   }, [enabled, planNextWander]);
 
@@ -1628,6 +1695,7 @@ export function useAutonomousCapy({
         setTimeout(() => setLandingBounce(false), 450);
 
         transitionTimerRef.current = setTimeout(() => {
+          transitionTimerRef.current = null;
           resumeGoalRef.current();
         }, 350);
       } else {
