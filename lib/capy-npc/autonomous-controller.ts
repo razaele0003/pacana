@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { CapyPose } from "../../components/capy-sprite";
-import { playCompanionSound } from "../companion-sound";
+import {
+  playCompanionSound,
+  playBreakdanceCelebration,
+  type CelebrationAudioHandle,
+} from "../companion-sound";
 import {
   Point,
   Rect,
@@ -28,6 +32,7 @@ export type CompanionMode =
   | "curious"
   | "happy"
   | "shouting"
+  | "celebrating"
   | "idle";
 
 export type CapyGoalType =
@@ -111,7 +116,7 @@ export function useAutonomousCapy({
 
   const currentGoalRef = useRef<CapyGoalType>("wander");
   const interruptedGoalRef = useRef<CapyGoalType | null>(null);
-  const temporaryActionRef = useRef<"happy" | "curious" | "reading" | "resting" | "planting" | "microphone" | null>(null);
+  const temporaryActionRef = useRef<"happy" | "curious" | "reading" | "resting" | "planting" | "microphone" | "celebrating" | null>(null);
   const isEmoteActiveRef = useRef<boolean>(false);
   const pausedWaypointsRef = useRef<Point[]>([]);
   const treeGrowthTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -202,6 +207,15 @@ export function useAutonomousCapy({
           resumeGoalRef.current();
         }
       }, 2500);
+    } else if (newMode === "celebrating") {
+      actionTimeoutRef.current = setTimeout(() => {
+        actionTimeoutRef.current = null;
+        if (modeRef.current === "celebrating") {
+          isEmoteActiveRef.current = false;
+          temporaryActionRef.current = null;
+          resumeGoalRef.current();
+        }
+      }, 4200);
     }
   }, []);
 
@@ -336,6 +350,88 @@ export function useAutonomousCapy({
         // Resume persistent goal (e.g. eating tree snack) or return to wander
         resumeGoalRef.current();
       }, emoteDuration);
+    },
+    [changeMode]
+  );
+
+  const celebrationAudioRef = useRef<HTMLAudioElement | CelebrationAudioHandle | null>(null);
+  const celebrationTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Temporary Celebration Breakdance Trigger (~3.4s) - stationary world position, preserves persistent goal!
+  // Ignores rapid duplicate triggers while celebration is active.
+  const triggerCelebration = useCallback(
+    (soundEnabled = true) => {
+      // 1. Rapid completion check: ignore if already celebrating
+      if (modeRef.current === "celebrating" || temporaryActionRef.current === "celebrating") {
+        return;
+      }
+
+      // 2. State priority check: do not interrupt special actions
+      if (
+        isDraggingRef.current ||
+        modeRef.current === "resting" ||
+        modeRef.current === "eating" ||
+        modeRef.current === "planting" ||
+        modeRef.current === "shouting" ||
+        currentGoalRef.current === "rest" ||
+        currentGoalRef.current === "alarm"
+      ) {
+        return;
+      }
+
+      // 3. Mark active
+      isEmoteActiveRef.current = true;
+      temporaryActionRef.current = "celebrating";
+
+      // 4. Pause current waypoints so Cappy stays at his current position without teleporting
+      if (waypointsRef.current.length > 0 && pausedWaypointsRef.current.length === 0) {
+        pausedWaypointsRef.current = [...waypointsRef.current];
+        waypointsRef.current = [];
+      }
+
+      // 5. Clear any pending emote or transition timers
+      if (emoteTimerRef.current) {
+        clearTimeout(emoteTimerRef.current);
+        emoteTimerRef.current = null;
+      }
+      if (transitionTimerRef.current) {
+        clearTimeout(transitionTimerRef.current);
+        transitionTimerRef.current = null;
+      }
+      if (celebrationTimerRef.current) {
+        clearTimeout(celebrationTimerRef.current);
+        celebrationTimerRef.current = null;
+      }
+
+      // 6. Set mode and pose to celebrating
+      setPose("celebrating");
+      changeMode("celebrating");
+      setActiveEmote(null);
+
+      const finishCelebration = () => {
+        if (celebrationTimerRef.current) {
+          clearTimeout(celebrationTimerRef.current);
+          celebrationTimerRef.current = null;
+        }
+        if (celebrationAudioRef.current) {
+          celebrationAudioRef.current = null;
+        }
+        if (modeRef.current === "celebrating") {
+          isEmoteActiveRef.current = false;
+          temporaryActionRef.current = null;
+          if (pausedWaypointsRef.current.length > 0) {
+            waypointsRef.current = pausedWaypointsRef.current;
+            pausedWaypointsRef.current = [];
+          }
+          resumeGoalRef.current();
+        }
+      };
+
+      // 7. Start synchronized audio
+      celebrationAudioRef.current = playBreakdanceCelebration(soundEnabled, finishCelebration);
+
+      // Fallback timer: 3.45s (matches breakdance duration)
+      celebrationTimerRef.current = setTimeout(finishCelebration, 3450);
     },
     [changeMode]
   );
@@ -1097,6 +1193,19 @@ export function useAutonomousCapy({
       changeMode("wander");
       setPose("walk");
       planNextWander();
+    } else if (modeRef.current === "celebrating") {
+      // Breakdance animation finished (all 24 frames completed)
+      if (celebrationTimerRef.current) {
+        clearTimeout(celebrationTimerRef.current);
+        celebrationTimerRef.current = null;
+      }
+      temporaryActionRef.current = null;
+      isEmoteActiveRef.current = false;
+      if (pausedWaypointsRef.current.length > 0) {
+        waypointsRef.current = pausedWaypointsRef.current;
+        pausedWaypointsRef.current = [];
+      }
+      resumeGoalRef.current();
     }
   }, [triggerEmote, changeMode, facing, pose, planNextWander]);
 
@@ -1662,6 +1771,7 @@ export function useAutonomousCapy({
     startPressFocus,
     startShouting,
     triggerPet,
+    triggerCelebration,
     toggleSleep,
     wakeUp,
     startDrag,

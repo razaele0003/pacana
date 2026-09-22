@@ -5,10 +5,35 @@ import CapySprite, { CapyPose } from "./capy-sprite";
 import CapyLeaf from "./capy-leaf";
 import CapyEmoteBubble from "./capy-emote-bubble";
 import CapyMenu from "./capy-menu";
-import { playCompanionSound } from "../lib/companion-sound";
+import { playCompanionSound, playBreakdanceCelebration } from "../lib/companion-sound";
 import { useAutonomousCapy, EmoteType } from "../lib/capy-npc/autonomous-controller";
 import type { Point } from "../lib/capy-npc/obstacle-manager";
 import { Home, Move } from "lucide-react";
+
+/**
+ * Checks whether an element is currently connected to the DOM,
+ * has non-zero dimensions, computed visibility, and is within the viewport.
+ */
+export function isElementActuallyVisible(el: HTMLElement | null): boolean {
+  if (!el || typeof window === "undefined") return false;
+  if (!document.contains(el)) return false;
+  const rect = el.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  const style = window.getComputedStyle(el);
+  if (
+    style.display === "none" ||
+    style.visibility === "hidden" ||
+    style.opacity === "0"
+  ) {
+    return false;
+  }
+  const inViewport =
+    rect.top < window.innerHeight &&
+    rect.bottom > 0 &&
+    rect.left < window.innerWidth &&
+    rect.right > 0;
+  return inViewport;
+}
 
 interface InteractiveCompanionProps {
   isFloating: boolean;
@@ -308,6 +333,47 @@ export default function InteractiveCompanion({
       window.removeEventListener("pacana:timer-complete", handleTimerComplete);
     };
   }, [isDockedContainer]);
+
+  // Handle task completion celebration (strictly when Cappy is actually visible in the current UI)
+  useEffect(() => {
+    const handleTaskCompleted = (e: Event) => {
+      const ce = e as CustomEvent<{
+        taskId?: string;
+        title?: string;
+        soundEnabled?: boolean;
+      }>;
+      const soundEnabled = ce.detail?.soundEnabled ?? true;
+
+      // Rule: Cappy must be ACTUALLY visible in the current UI
+      const el = rootRef.current;
+      if (!isElementActuallyVisible(el)) {
+        return;
+      }
+
+      if (isFloating && !isDockedContainer) {
+        // Autonomous wandering Cappy
+        npc.triggerCelebration(soundEnabled);
+      } else if (isDockedContainer) {
+        // Docked Cappy in Focus sidebar
+        // State priority: do not interrupt sleep per rule 11
+        if (dockedPose === "sleep") {
+          return;
+        }
+        setDockedPose("celebrating");
+        playBreakdanceCelebration(soundEnabled, () => {
+          setDockedPose("idle");
+        });
+        setTimeout(() => {
+          setDockedPose("idle");
+        }, 3450);
+      }
+    };
+
+    window.addEventListener("pacana:task-completed", handleTaskCompleted);
+    return () => {
+      window.removeEventListener("pacana:task-completed", handleTaskCompleted);
+    };
+  }, [isFloating, isDockedContainer, npc, dockedPose]);
 
   // Floating Cappy: Listen for Call Capy Home & Navigation Commands
   useEffect(() => {

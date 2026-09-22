@@ -7,10 +7,14 @@ import InteractiveCompanion from "./interactive-companion";
 import FullscreenTimer from "./fullscreen-timer";
 import RingtoneBrowser from "./ringtone-browser";
 import { LogPhoto } from "./log-photo";
+import TasksView from "./tasks-view";
+import TaskDialog, { CATEGORY_ICONS } from "./task-dialog";
 import {
   Leaf,
   Timer,
+  CheckSquare,
   Clock3,
+  Clock,
   BookOpen,
   ChartNoAxesColumnIncreasing,
   Settings2,
@@ -33,6 +37,7 @@ import {
   Music,
   Trash2,
   Plus,
+  Sparkles,
 } from "lucide-react";
 import type {
   State,
@@ -60,7 +65,9 @@ import {
   startPhase,
   resetProgress,
   totalXP,
+  toggleTask,
 } from "../core/engine";
+import { playCompanionSound } from "../lib/companion-sound";
 import { dayKey, localInstant, parts } from "../core/schedule";
 import { transact, restore } from "../data/store";
 import { parseBackup } from "../data/backup";
@@ -75,6 +82,7 @@ import {
 
 const tabs = [
   ["Focus", Timer],
+  ["Tasks", CheckSquare],
   ["Check-ins", Clock3],
   ["Journal", BookOpen],
   ["Progress", ChartNoAxesColumnIncreasing],
@@ -164,7 +172,8 @@ export default function Pacana() {
   const [date, setDate] = useState(""),
     [online, setOnline] = useState(true),
     [isCompanionFloating, setIsCompanionFloating] = useState(false),
-    [companionDropPos, setCompanionDropPos] = useState<{ x: number; y: number } | null>(null);
+    [companionDropPos, setCompanionDropPos] = useState<{ x: number; y: number } | null>(null),
+    [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -172,6 +181,16 @@ export default function Pacana() {
         localStorage.getItem("pacana:companion:floating") === "true",
       );
     }
+  }, []);
+
+  useEffect(() => {
+    const handleOpenCreate = () => {
+      setIsCreateTaskOpen(true);
+    };
+    window.addEventListener("pacana:open-create-task", handleOpenCreate);
+    return () => {
+      window.removeEventListener("pacana:open-create-task", handleOpenCreate);
+    };
   }, []);
 
   useEffect(() => {
@@ -464,13 +483,13 @@ export default function Pacana() {
         e.preventDefault();
         choose("Settings");
       }
-      // Ctrl+1..4 -> Switch tabs
+      // Ctrl+1..5 -> Switch tabs
       else if (
         (e.ctrlKey || e.metaKey) &&
-        ["1", "2", "3", "4"].includes(e.key)
+        ["1", "2", "3", "4", "5"].includes(e.key)
       ) {
         e.preventDefault();
-        const tabNames = ["Focus", "Check-ins", "Journal", "Progress"];
+        const tabNames = ["Focus", "Tasks", "Check-ins", "Journal", "Progress"];
         const target = tabNames[parseInt(e.key, 10) - 1];
         if (target) choose(target);
       }
@@ -989,43 +1008,140 @@ export default function Pacana() {
                     </div>
                   </div>
                 )}
-                <div className="task-card card" data-capybara-obstacle>
-                  <span className="soft-icon">
-                    <BookOpen size={21} />
-                  </span>
-                  <label className="field">
-                    WHAT ARE YOU WORKING ON?
-                    <input
-                      maxLength={1000}
-                      placeholder="Give this moment an intention…"
-                      value={
-                        timer && timer.status !== "complete" ? timer.task : task
-                      }
-                      onChange={(e) => setTask(e.target.value)}
-                      disabled={!!timer && timer.status !== "complete"}
-                    />
-                  </label>
-                  <div className="task-category-wrapper">
-                    <select
-                      className="task-category-select"
-                      aria-label="Focus category"
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      disabled={!!timer && timer.status !== "complete"}
-                    >
-                      {categories.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      size={14}
-                      className="task-category-chevron"
-                      aria-hidden="true"
-                    />
-                  </div>
-                </div>
+                {(() => {
+                  const currentTaskTitle = (timer && timer.status !== "complete" ? timer.task : task).trim();
+                  const matched = currentTaskTitle && (state.tasks || []).find(
+                    (t) => !t.completed && t.title.toLowerCase() === currentTaskTitle.toLowerCase()
+                  );
+                  const isTimerRunning = !!timer && timer.status !== "complete";
+
+                  return (
+                    <div className="task-card card focus-intention-card" data-capybara-obstacle>
+                      <span className="soft-icon focus-intention-icon">
+                        <BookOpen size={20} />
+                      </span>
+
+                      {matched || (isTimerRunning && currentTaskTitle) ? (
+                        /* Case 1: An active task / intention exists */
+                        <div className="focus-intention-active-body">
+                          <div className="focus-intention-label-row">
+                            <span className="focus-intention-eyebrow">
+                              {isTimerRunning ? "CURRENT FOCUS TASK" : "SELECTED TASK"}
+                            </span>
+                            {isTimerRunning && (
+                              <span className="focus-intention-live-indicator">
+                                <span className="focus-live-dot" /> Focusing
+                              </span>
+                            )}
+                          </div>
+                          <div className="focus-intention-content-row">
+                            {matched && (
+                              <button
+                                type="button"
+                                className="focus-task-checkbox"
+                                title={`Mark "${matched.title}" as complete`}
+                                onClick={async () => {
+                                  playCompanionSound("snack");
+                                  await update((s) => {
+                                    toggleTask(s, matched.id, Date.now());
+                                  });
+                                  window.dispatchEvent(
+                                    new CustomEvent("pacana:task-completed", {
+                                      detail: {
+                                        taskId: matched.id,
+                                        title: matched.title,
+                                        soundEnabled: state.settings?.sound ?? true,
+                                      },
+                                    })
+                                  );
+                                }}
+                              >
+                                <span className="focus-task-checkbox-box">
+                                  <Check size={13} strokeWidth={3} className="focus-task-check-icon" />
+                                </span>
+                              </button>
+                            )}
+                            <span className="focus-active-task-title" title={currentTaskTitle}>
+                              {currentTaskTitle}
+                            </span>
+
+                            {matched && (
+                              <div className="focus-active-task-badges">
+                                {matched.category && (
+                                  <span className="focus-task-badge category">
+                                    {CATEGORY_ICONS[matched.category] || "🌱"} {matched.category}
+                                  </span>
+                                )}
+                                {matched.estimatedSessions && (
+                                  <span className="focus-task-badge sessions">
+                                    {matched.completedSessions}/{matched.estimatedSessions} sessions
+                                  </span>
+                                )}
+                                {matched.focusDuration && (
+                                  <span className="focus-task-badge duration">
+                                    <Clock size={11} /> {matched.focusDuration}m
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {!isTimerRunning && (
+                              <button
+                                type="button"
+                                className="focus-task-clear-btn"
+                                title="Clear selected task"
+                                onClick={() => setTask("")}
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        /* Case 2: No active task — clean intention input */
+                        <label className="focus-intention-input-body">
+                          <span className="focus-intention-eyebrow">WHAT ARE YOU WORKING ON?</span>
+                          <input
+                            maxLength={1000}
+                            placeholder="Give this moment an intention or pick a task on the right →"
+                            value={task}
+                            onChange={(e) => setTask(e.target.value)}
+                            className="focus-intention-input"
+                          />
+                        </label>
+                      )}
+
+                      {/* Category selector / pill */}
+                      <div className="focus-intention-category-col">
+                        {isTimerRunning ? (
+                          <span className="focus-category-pill">
+                            {CATEGORY_ICONS[category] || "🌱"} {category}
+                          </span>
+                        ) : (
+                          <div className="task-category-wrapper">
+                            <select
+                              className="task-category-select"
+                              aria-label="Focus category"
+                              value={category}
+                              onChange={(e) => setCategory(e.target.value)}
+                            >
+                              {categories.map((c) => (
+                                <option key={c} value={c}>
+                                  {c}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              size={14}
+                              className="task-category-chevron"
+                              aria-hidden="true"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="mini-stats">
                   <div className="card">
                     <Timer />
@@ -1057,85 +1173,280 @@ export default function Pacana() {
                   “You don’t have to do it all. Just the next little thing.”
                 </p>
               </section>
-              <aside className="rhythm card" data-capybara-obstacle>
-                <div className="section-title">
-                  <h2>Today’s rhythm</h2>
-                  <span className="soft-icon">
-                    <Clock3 size={19} />
-                  </span>
-                </div>
-                <p>A little awareness, hour by hour.</p>
-                {todayChecks.length === 0 ? (
-                  <div className="empty-rhythm">
-                    <Sprout size={34} />
-                    <h3>A fresh little page.</h3>
-                    <p>Your check-ins will find a home here.</p>
-                    <button onClick={() => choose("Check-ins")}>
-                      <span>Set your rhythm</span>
-                      <ArrowRight size={15} />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="timeline">
-                    {todayChecks.slice(-6).map((c) => (
+              <aside className="focus-sidebar">
+                {/* Dedicated Tasks Widget in Focus Sidebar */}
+                <div className="card focus-tasks-widget" data-capybara-obstacle>
+                  <div className="focus-tasks-widget-header">
+                    <div className="focus-tasks-widget-title-group">
+                      <CheckSquare size={16} className="focus-tasks-widget-icon" />
+                      <span className="focus-tasks-widget-title">Tasks</span>
+                      {(() => {
+                        const uncompleted = (state.tasks || []).filter((t) => !t.completed).length;
+                        return uncompleted > 0 ? (
+                          <span className="focus-tasks-count-pill">{uncompleted}</span>
+                        ) : null;
+                      })()}
+                    </div>
+                    <div className="focus-tasks-widget-header-actions">
                       <button
-                        className="timeline-item"
-                        key={c.id}
-                        onClick={() => setEditing(c)}
+                        type="button"
+                        className="focus-tasks-add-btn"
+                        title="Add a new task"
+                        onClick={() => setIsCreateTaskOpen(true)}
                       >
-                        <span className={"timeline-dot " + c.status}>
-                          {c.status === "logged" ? (
-                            <Check size={12} />
-                          ) : (
-                            <span />
-                          )}
-                        </span>
-                        <span>
-                          <small>{time(c.end)}</small>
-                          <strong>
-                            {c.status === "pending"
-                              ? "Ready to reflect"
-                              : c.activity || "Skipped"}
-                          </strong>
-                          <em>
-                            {time(c.start)} – {time(c.end)}
-                          </em>
-                        </span>
+                        <Plus size={13} />
+                        <span>Add Task</span>
                       </button>
-                    ))}
+                      <button
+                        type="button"
+                        className="focus-tasks-view-all-btn"
+                        title="View all tasks"
+                        onClick={() => choose("Tasks")}
+                      >
+                        <span>View all</span>
+                        <ChevronRight size={13} />
+                      </button>
+                    </div>
                   </div>
-                )}
-                {state.run && (
-                  <div className="next-check">
-                    <span className="eyebrow">NEXT CHECK-IN</span>
-                    <strong>{time(state.run.nextAt)}</strong>
-                    <span>
-                      in {countdown(Math.max(0, state.run.nextAt - now))}
+
+                  {/* Task List in Widget */}
+                  {(() => {
+                    const uncompletedTasks = (state.tasks || []).filter((t) => !t.completed);
+                    const currentRunningTitle = (timer && timer.status !== "complete" ? timer.task : task).trim().toLowerCase();
+
+                    if (uncompletedTasks.length === 0) {
+                      return (
+                        <div className="focus-tasks-widget-empty">
+                          <span className="focus-tasks-empty-leaf">🌱</span>
+                          <p>No tasks for today</p>
+                          <button
+                            type="button"
+                            className="focus-tasks-empty-add-btn"
+                            onClick={() => setIsCreateTaskOpen(true)}
+                          >
+                            <Plus size={13} />
+                            <span>Add your first task</span>
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="focus-tasks-widget-list">
+                        {uncompletedTasks.slice(0, 5).map((t) => {
+                          const isCurrentActive =
+                            currentRunningTitle &&
+                            t.title.trim().toLowerCase() === currentRunningTitle &&
+                            timer &&
+                            timer.status !== "complete";
+
+                          return (
+                            <div
+                              key={t.id}
+                              className={`focus-widget-task-row ${isCurrentActive ? "is-active-task" : ""}`}
+                            >
+                              {/* Checkbox to complete task */}
+                              <button
+                                type="button"
+                                className="focus-widget-checkbox"
+                                title={`Mark "${t.title}" as complete`}
+                                onClick={async () => {
+                                  playCompanionSound("snack");
+                                  await update((s) => {
+                                    toggleTask(s, t.id, Date.now());
+                                  });
+                                  window.dispatchEvent(
+                                    new CustomEvent("pacana:task-completed", {
+                                      detail: {
+                                        taskId: t.id,
+                                        title: t.title,
+                                        soundEnabled: state.settings?.sound ?? true,
+                                      },
+                                    })
+                                  );
+                                }}
+                              >
+                                <span className="focus-widget-checkbox-inner">
+                                  <Check size={11} strokeWidth={3} />
+                                </span>
+                              </button>
+
+                              {/* Task Title & Meta */}
+                              <div
+                                className="focus-widget-task-info"
+                                onClick={() => {
+                                  setTask(t.title);
+                                  if (t.category) setCategory(t.category);
+                                }}
+                                title="Click to select this task"
+                              >
+                                <span className="focus-widget-task-name">{t.title}</span>
+                                <div className="focus-widget-task-submeta">
+                                  <span>{CATEGORY_ICONS[t.category || "Study"] || "🌱"} {t.category || "Study"}</span>
+                                  {t.focusDuration && <span>· {t.focusDuration}m</span>}
+                                </div>
+                              </div>
+
+                              {/* Start Focus Button or Active Badge */}
+                              <div className="focus-widget-task-action">
+                                {isCurrentActive ? (
+                                  <span className="focus-widget-active-tag">
+                                    <span className="focus-live-dot" /> Focusing
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="focus-widget-start-btn"
+                                    title={`Start focus on "${t.title}"`}
+                                    onClick={() => {
+                                      setTask(t.title);
+                                      if (t.category) setCategory(t.category);
+                                      void update((s) => {
+                                        if (s.timer && s.timer.status !== "complete") {
+                                          end(s, Date.now());
+                                        }
+                                        const customDuration = t.focusDuration ? t.focusDuration * 60000 : undefined;
+                                        startPhase(
+                                          s,
+                                          Date.now(),
+                                          "focus",
+                                          t.title,
+                                          t.category || "Study",
+                                          customDuration,
+                                        );
+                                      });
+                                    }}
+                                  >
+                                    <Play size={11} fill="currentColor" />
+                                    <span>Start</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {uncompletedTasks.length > 5 && (
+                          <button
+                            type="button"
+                            className="focus-widget-more-link"
+                            onClick={() => choose("Tasks")}
+                          >
+                            +{uncompletedTasks.length - 5} more tasks · View all
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="rhythm card" data-capybara-obstacle>
+                  <div className="section-title">
+                    <h2>Today’s rhythm</h2>
+                    <span className="soft-icon">
+                      <Clock3 size={19} />
                     </span>
                   </div>
-                )}
-                <button className="text-link" onClick={() => choose("Journal")}>
-                  Open your journal <ArrowRight size={16} />
-                </button>
-                <div className="kind-note">
-                  <SidebarCompanion
-                    pose={
-                      phase !== "focus"
-                        ? "rest"
-                        : timer?.status === "running"
-                          ? "study"
-                          : "idle"
-                    }
-                    isFloating={isCompanionFloating}
-                    onToggleFloating={handleToggleCompanion}
-                  />
-                  <p>
-                    A moment to notice.
-                    <br />A little room to grow.
-                  </p>
+                  <p>A little awareness, hour by hour.</p>
+                  {todayChecks.length === 0 ? (
+                    <div className="empty-rhythm">
+                      <Sprout size={34} />
+                      <h3>A fresh little page.</h3>
+                      <p>Your check-ins will find a home here.</p>
+                      <button onClick={() => choose("Check-ins")}>
+                        <span>Set your rhythm</span>
+                        <ArrowRight size={15} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="timeline">
+                      {todayChecks.slice(-6).map((c) => (
+                        <button
+                          className="timeline-item"
+                          key={c.id}
+                          onClick={() => setEditing(c)}
+                        >
+                          <span className={"timeline-dot " + c.status}>
+                            {c.status === "logged" ? (
+                              <Check size={12} />
+                            ) : (
+                              <span />
+                            )}
+                          </span>
+                          <span>
+                            <small>{time(c.end)}</small>
+                            <strong>
+                              {c.status === "pending"
+                                ? "Ready to reflect"
+                                : c.activity || "Skipped"}
+                            </strong>
+                            <em>
+                              {time(c.start)} – {time(c.end)}
+                            </em>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {state.run && (
+                    <div className="next-check">
+                      <span className="eyebrow">NEXT CHECK-IN</span>
+                      <strong>{time(state.run.nextAt)}</strong>
+                      <span>
+                        in {countdown(Math.max(0, state.run.nextAt - now))}
+                      </span>
+                    </div>
+                  )}
+                  <button className="text-link" onClick={() => choose("Journal")}>
+                    Open your journal <ArrowRight size={16} />
+                  </button>
+                  <div className="kind-note">
+                    <SidebarCompanion
+                      pose={
+                        phase !== "focus"
+                          ? "rest"
+                          : timer?.status === "running"
+                            ? "study"
+                            : "idle"
+                      }
+                      isFloating={isCompanionFloating}
+                      onToggleFloating={handleToggleCompanion}
+                    />
+                    <p>
+                      A moment to notice.
+                      <br />A little room to grow.
+                    </p>
+                  </div>
                 </div>
               </aside>
             </div>
+          )}
+          {tab === "Tasks" && (
+            <TasksView
+              state={state}
+              update={update}
+              now={now}
+              onChooseTab={choose}
+              onStartFocus={(t) => {
+                setTask(t.title);
+                if (t.category) setCategory(t.category);
+                choose("Focus");
+                void update((s) => {
+                  if (s.timer && s.timer.status !== "complete") {
+                    end(s, Date.now());
+                  }
+                  const customDuration = t.focusDuration ? t.focusDuration * 60000 : undefined;
+                  startPhase(
+                    s,
+                    Date.now(),
+                    "focus",
+                    t.title,
+                    t.category || "Study",
+                    customDuration,
+                  );
+                });
+              }}
+            />
           )}
           {tab === "Check-ins" && (
             <>
@@ -1389,8 +1700,48 @@ export default function Pacana() {
                 );
             })
           }
+          onToggleTask={async (t) => {
+            playCompanionSound("snack");
+            await update((s) => {
+              toggleTask(s, t.id, Date.now());
+            });
+            window.dispatchEvent(
+              new CustomEvent("pacana:task-completed", {
+                detail: {
+                  taskId: t.id,
+                  title: t.title,
+                  soundEnabled: state.settings?.sound ?? true,
+                },
+              })
+            );
+          }}
         />
       )}
+      <TaskDialog
+        isOpen={isCreateTaskOpen}
+        onClose={() => setIsCreateTaskOpen(false)}
+        state={state}
+        update={update}
+        onStartFocus={(t) => {
+          setTask(t.title);
+          if (t.category) setCategory(t.category);
+          setTab("Focus");
+          void update((s) => {
+            if (s.timer && s.timer.status !== "complete") {
+              end(s, Date.now());
+            }
+            const customDuration = t.focusDuration ? t.focusDuration * 60000 : undefined;
+            startPhase(
+              s,
+              Date.now(),
+              "focus",
+              t.title,
+              t.category || "Study",
+              customDuration,
+            );
+          });
+        }}
+      />
       {setup && (
         <Modal title="Find your focus rhythm" close={() => setSetup(false)}>
           <TimerSettings

@@ -41,6 +41,30 @@ const schedule = z
     (v) => v.explicit.length > 0 || v.end >= v.start,
     "End time must follow start time",
   );
+const taskPriority = z.enum(["low", "medium", "high"]);
+const taskItem = z.object({
+  id: z.string(),
+  title: z.string().max(1000),
+  category: z.string().max(100).optional(),
+  priority: taskPriority.optional(),
+  dueDate: z.string().max(100).optional(),
+  estimatedSessions: z.number().int().min(1).max(100).optional(),
+  completedSessions: z.number().int().nonnegative(),
+  totalFocusSeconds: z.number().int().nonnegative(),
+  completed: z.boolean(),
+  completedAt: timestamp.optional(),
+  createdAt: timestamp,
+  order: z.number().int().nonnegative(),
+  focusDuration: z.number().int().min(1).max(180).optional(),
+  shortBreak: z.number().int().min(1).max(60).optional(),
+  longBreak: z.number().int().min(1).max(60).optional(),
+});
+const todayGoalSchema = z.object({
+  title: z.string().max(1000),
+  completed: z.boolean(),
+  targetSessions: z.number().int().min(1).max(100).optional(),
+  quote: z.string().max(1000).optional(),
+});
 const schema = z.object({
   version: z.literal(1),
   revision: z.number().int().nonnegative(),
@@ -169,6 +193,8 @@ const schema = z.object({
     .max(100000)
     .default([]),
   rewards: z.record(z.number().int().nonnegative()),
+  tasks: z.array(taskItem).max(10000).optional().default([]),
+  todayGoal: todayGoalSchema.optional(),
 });
 export function parseBackup(input: unknown): State {
   const result = schema.safeParse(input);
@@ -180,7 +206,8 @@ export function parseBackup(input: unknown): State {
   if (
     new Set(s.sessions.map((x) => x.id)).size !== s.sessions.length ||
     new Set(s.checkpoints.map((x) => x.id)).size !== s.checkpoints.length ||
-    new Set(s.journalEntries.map((x) => x.id)).size !== s.journalEntries.length
+    new Set(s.journalEntries.map((x) => x.id)).size !== s.journalEntries.length ||
+    (s.tasks && new Set(s.tasks.map((x) => x.id)).size !== s.tasks.length)
   )
     throw new Error("Backup contains duplicate records.");
   const journalIntervals = [...s.checkpoints, ...s.journalEntries].sort(

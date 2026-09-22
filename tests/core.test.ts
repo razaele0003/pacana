@@ -20,6 +20,12 @@ import {
   findJournalOverlap,
   deleteSession,
   resetProgress,
+  addTask,
+  updateTask,
+  toggleTask,
+  deleteTask,
+  setTodayGoal,
+  recordTaskFocus,
 } from "../core/engine";
 import { nextClock, localInstant } from "../core/schedule";
 import { parseBackup } from "../data/backup";
@@ -501,3 +507,137 @@ test("timer completion alarms do not depend on optional check-in sounds", () => 
   settings.sound = true;
   assert.equal(shouldPlayRingtone(settings), true);
 });
+
+test("task lifecycle and persistence round-trip through backup", () => {
+  const s = defaults();
+  const initialTaskCount = s.tasks?.length ?? 0;
+
+  // Add a task
+  const newTask = addTask(s, {
+    title: "Write design doc",
+    category: "Work",
+    priority: "high",
+    estimatedSessions: 3,
+    dueDate: "2026-09-30",
+  });
+  assert.equal(s.tasks?.length, initialTaskCount + 1);
+  assert.equal(newTask.title, "Write design doc");
+  assert.equal(newTask.completed, false);
+  assert.equal(newTask.completedSessions, 0);
+
+  // Update the task
+  updateTask(s, newTask.id, { title: "Write technical design doc", priority: "medium" });
+  assert.equal(s.tasks?.find((t) => t.id === newTask.id)?.title, "Write technical design doc");
+  assert.equal(s.tasks?.find((t) => t.id === newTask.id)?.priority, "medium");
+
+  // Record focus progress
+  recordTaskFocus(s, "Write technical design doc", 1500);
+  const updated = s.tasks?.find((t) => t.id === newTask.id);
+  assert.equal(updated?.completedSessions, 1);
+  assert.equal(updated?.totalFocusSeconds, 1500);
+
+  // Toggle completion
+  toggleTask(s, newTask.id);
+  assert.equal(s.tasks?.find((t) => t.id === newTask.id)?.completed, true);
+  assert.ok(s.tasks?.find((t) => t.id === newTask.id)?.completedAt);
+
+  // Verify persistence round-trip via parseBackup
+  const serialized = JSON.parse(JSON.stringify(s));
+  const restored = parseBackup(serialized);
+  assert.equal(restored.tasks?.length, s.tasks?.length);
+  const restoredTask = restored.tasks?.find((t) => t.id === newTask.id);
+  assert.equal(restoredTask?.title, "Write technical design doc");
+  assert.equal(restoredTask?.completed, true);
+  assert.equal(restoredTask?.completedSessions, 1);
+
+  // Delete the task
+  deleteTask(s, newTask.id);
+  assert.equal(s.tasks?.length, initialTaskCount);
+});
+
+test("today goal is completely separate from tasks", () => {
+  const s = defaults();
+  const taskCountBefore = s.tasks?.length ?? 0;
+
+  // Set today's goal
+  setTodayGoal(s, {
+    title: "Master Quantum Physics",
+    targetSessions: 6,
+    quote: "Focus is a muscle.",
+  });
+
+  assert.equal(s.todayGoal?.title, "Master Quantum Physics");
+  assert.equal(s.todayGoal?.targetSessions, 6);
+  assert.equal(s.todayGoal?.quote, "Focus is a muscle.");
+
+  // Ensure setting today's goal does NOT add or modify any task
+  assert.equal(s.tasks?.length, taskCountBefore);
+  assert.equal(s.tasks?.some((t) => t.title === "Master Quantum Physics"), false);
+
+  // Verify today's goal survives backup parsing
+  const restored = parseBackup(JSON.parse(JSON.stringify(s)));
+  assert.equal(restored.todayGoal?.title, "Master Quantum Physics");
+  assert.equal(restored.todayGoal?.targetSessions, 6);
+});
+
+test("task completion is decoupled from companion and persists regardless of Cappy state", () => {
+  const s = defaults();
+  const task = addTask(s, {
+    title: "Finish my lab report",
+    category: "School",
+    priority: "high",
+    estimatedSessions: 3,
+  });
+
+  assert.equal(task.completed, false);
+
+  // Complete task
+  toggleTask(s, task.id);
+  assert.equal(task.completed, true);
+  assert.ok(task.completedAt);
+
+  // Verify backup/restore keeps completed state
+  const restored = parseBackup(JSON.parse(JSON.stringify(s)));
+  const restoredTask = restored.tasks?.find((t) => t.id === task.id);
+  assert.equal(restoredTask?.completed, true);
+
+  // Uncomplete task
+  toggleTask(s, task.id);
+  assert.equal(task.completed, false);
+  assert.equal(task.completedAt, undefined);
+});
+
+test("task with custom focus and break settings persists and starts immediately with custom duration", () => {
+  const s = defaults();
+  const task = addTask(s, {
+    title: "Deep research paper",
+    category: "Study",
+    priority: "high",
+    estimatedSessions: 4,
+    focusDuration: 45,
+    shortBreak: 10,
+    longBreak: 20,
+  });
+
+  assert.equal(task.focusDuration, 45);
+  assert.equal(task.shortBreak, 10);
+  assert.equal(task.longBreak, 20);
+
+  // Verify backup/restore keeps focus and break settings
+  const restored = parseBackup(JSON.parse(JSON.stringify(s)));
+  const restoredTask = restored.tasks?.find((t) => t.id === task.id);
+  assert.equal(restoredTask?.focusDuration, 45);
+  assert.equal(restoredTask?.shortBreak, 10);
+  assert.equal(restoredTask?.longBreak, 20);
+
+  // Test startPhase uses task's custom focus duration
+  const now = 1000000;
+  startPhase(s, now, "focus", task.title, task.category);
+  assert.ok(s.timer);
+  assert.equal(s.timer.status, "running");
+  assert.equal(s.timer.duration, 45 * 60000);
+  assert.equal(s.timer.endAt, now + 45 * 60000);
+  assert.equal(s.timer.task, "Deep research paper");
+});
+
+

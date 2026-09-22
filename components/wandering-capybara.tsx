@@ -1,14 +1,16 @@
 "use client";
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import CapySprite from "./capy-sprite";
 import CapyLeaf from "./capy-leaf";
 import CapyEmoteBubble from "./capy-emote-bubble";
 import CapyMenu from "./capy-menu";
 import { useAutonomousCapy } from "../lib/capy-npc/autonomous-controller";
+import { isElementActuallyVisible } from "./interactive-companion";
 
 export default function WanderingCapybara() {
   const [isHovered, setIsHovered] = useState(false);
   const [menuSuppressed, setMenuSuppressed] = useState(false);
+  const capyRef = useRef<HTMLDivElement>(null);
 
   // Instantly dismiss menu on any interaction so Cappy's head & emote are clear
   const handleMenuAction = (action: () => void) => {
@@ -35,6 +37,29 @@ export default function WanderingCapybara() {
     walkSpeed: 48,
     isFullScreen: true,
   });
+
+  // Handle task completion celebration in fullscreen mode (strictly when actually visible)
+  useEffect(() => {
+    const handleTaskCompleted = (e: Event) => {
+      const ce = e as CustomEvent<{
+        taskId?: string;
+        title?: string;
+        soundEnabled?: boolean;
+      }>;
+      const soundEnabled = ce.detail?.soundEnabled ?? true;
+
+      if (!isElementActuallyVisible(capyRef.current)) {
+        return;
+      }
+
+      npc.triggerCelebration(soundEnabled);
+    };
+
+    window.addEventListener("pacana:task-completed", handleTaskCompleted);
+    return () => {
+      window.removeEventListener("pacana:task-completed", handleTaskCompleted);
+    };
+  }, [npc]);
 
   // Pointer drag events
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -113,6 +138,7 @@ export default function WanderingCapybara() {
 
       {/* Autonomous Wandering Cappy in Fullscreen View */}
       <div
+        ref={capyRef}
         className={`fullscreen-autonomous-capy ${
           npc.landingBounce ? "landing-bounce" : ""
         } mode-${npc.mode}`}

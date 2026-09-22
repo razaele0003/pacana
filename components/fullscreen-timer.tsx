@@ -1,8 +1,8 @@
 "use client";
 import WanderingCapybara from "./wandering-capybara";
 import { useEffect, useRef, useState } from "react";
-import { Leaf, Pause, Play, Square, X } from "lucide-react";
-import type { State } from "../core/model";
+import { Leaf, Pause, Play, Square, X, Check } from "lucide-react";
+import type { State, Task } from "../core/model";
 import { nextPhase, remaining } from "../core/engine";
 
 function ScoreboardTile({ digit }: { digit: string }) {
@@ -87,6 +87,7 @@ export default function FullscreenTimer({
   primary,
   stop,
   error,
+  onToggleTask,
 }: {
   state: State;
   now: number;
@@ -94,6 +95,7 @@ export default function FullscreenTimer({
   primary: () => void;
   stop: () => void;
   error: string;
+  onToggleTask?: (task: Task) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const seconds = Math.ceil(remaining(state, now) / 1000);
@@ -122,6 +124,13 @@ export default function FullscreenTimer({
       : timer.status === "paused"
         ? "Resume"
         : `Start ${phaseNames[nextPhase(state)].toLowerCase()}`;
+  const matchedTask =
+    timer?.task && (state.tasks || []).find(
+      (t) =>
+        !t.completed &&
+        t.title.toLowerCase() === timer.task.trim().toLowerCase()
+    );
+
   useEffect(() => {
     const element = dialog.current;
     element?.showModal();
@@ -195,11 +204,24 @@ export default function FullscreenTimer({
               </div>
             ))}
           </div>
-          <p className="fullscreen-task">
-            {timer?.status === "complete"
-              ? "A little progress, made. Take a breath."
-              : timer?.task || "A little focus goes a long way."}
-          </p>
+          <div className="fullscreen-task-wrapper">
+            <p className="fullscreen-task">
+              {timer?.status === "complete"
+                ? "A little progress, made. Take a breath."
+                : timer?.task || "A little focus goes a long way."}
+            </p>
+            {matchedTask && onToggleTask && timer?.status !== "complete" && (
+              <button
+                type="button"
+                className="fullscreen-task-check-btn"
+                onClick={() => onToggleTask(matchedTask)}
+                title={`Mark "${matchedTask.title}" as complete`}
+              >
+                <Check size={14} />
+                <span>Mark complete</span>
+              </button>
+            )}
+          </div>
           <div className="fullscreen-actions">
             <button className="primary" data-capybara-target="focus" onClick={primary}>
               {timer?.status === "running" ? (

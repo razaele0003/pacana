@@ -85,6 +85,30 @@ export type JournalEntry = {
   createdAt: number;
   photo?: string;
 };
+export type TaskPriority = "low" | "medium" | "high";
+export type Task = {
+  id: string;
+  title: string;
+  category?: string;
+  priority?: TaskPriority;
+  dueDate?: string;
+  estimatedSessions?: number;
+  completedSessions: number;
+  totalFocusSeconds: number;
+  completed: boolean;
+  completedAt?: number;
+  createdAt: number;
+  order: number;
+  focusDuration?: number;
+  shortBreak?: number;
+  longBreak?: number;
+};
+export type TodayGoal = {
+  title: string;
+  completed: boolean;
+  targetSessions?: number;
+  quote?: string;
+};
 export type State = {
   version: 1;
   settings: Settings;
@@ -97,6 +121,8 @@ export type State = {
   checkpoints: Checkpoint[];
   journalEntries: JournalEntry[];
   rewards: Record<string, number>;
+  tasks?: Task[];
+  todayGoal?: TodayGoal;
   revision: number;
 };
 export const defaults = (timezone = "Asia/Manila"): State => ({
@@ -133,5 +159,61 @@ export const defaults = (timezone = "Asia/Manila"): State => ({
   checkpoints: [],
   journalEntries: [],
   rewards: {},
+  tasks: [
+    {
+      id: "default-task-1",
+      title: "Finish my lab report",
+      category: "Study",
+      priority: "high",
+      estimatedSessions: 4,
+      completedSessions: 0,
+      totalFocusSeconds: 0,
+      completed: false,
+      createdAt: 1774200000000,
+      order: 0,
+    },
+    {
+      id: "default-task-2",
+      title: "Review MOSFET notes",
+      category: "Study",
+      priority: "medium",
+      estimatedSessions: 2,
+      completedSessions: 0,
+      totalFocusSeconds: 0,
+      completed: false,
+      createdAt: 1774200000001,
+      order: 1,
+    },
+    {
+      id: "default-task-3",
+      title: "Fix Pacana animation",
+      category: "Project",
+      priority: "medium",
+      estimatedSessions: 3,
+      completedSessions: 1,
+      totalFocusSeconds: 1500,
+      completed: false,
+      createdAt: 1774200000002,
+      order: 2,
+    },
+    {
+      id: "default-task-4",
+      title: "Do OJT liquidation",
+      category: "Work",
+      priority: "low",
+      estimatedSessions: 2,
+      completedSessions: 0,
+      totalFocusSeconds: 0,
+      completed: false,
+      createdAt: 1774200000003,
+      order: 3,
+    },
+  ],
+  todayGoal: {
+    title: "Finish my lab report",
+    completed: false,
+    targetSessions: 4,
+    quote: "Discipline today, results tomorrow.",
+  },
   revision: 0,
 });

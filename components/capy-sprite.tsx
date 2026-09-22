@@ -18,7 +18,8 @@ export type CapyPose =
   | "drag"
   | "pet"
   | "bite"
-  | "shout";
+  | "shout"
+  | "celebrating";
 
 interface CapySpriteProps {
   pose: CapyPose;
@@ -118,6 +119,16 @@ const ANIMATION_SEQUENCES: Partial<Record<CapyPose, AnimationConfig>> = {
       frameCount: 6,
     },
   },
+  celebrating: {
+    // 24 frames from breakdance sprite sheet: ~3.3s total duration synchronized with audio
+    frames: Array.from({ length: 24 }, (_, i) => `/art/cappy/dance-${i + 1}.png`),
+    intervalMs: 138,
+    loop: false,
+    spriteSheet: {
+      src: "/art/cappy/dance-sheet.png",
+      frameCount: 24,
+    },
+  },
 };
 
 const STATIC_POSE_IMAGES: Partial<Record<CapyPose, string>> = {
@@ -140,6 +151,8 @@ const ALL_PRELOAD_IMAGES: string[] = [
   ...Array.from({ length: 8 }, (_, i) => `/art/cappy/plant-${i + 1}.png`),
   ...Array.from({ length: 8 }, (_, i) => `/art/cappy/curious-${i + 1}.png`),
   ...Array.from({ length: 6 }, (_, i) => `/art/cappy/alarm-${i + 1}.png`),
+  ...Array.from({ length: 24 }, (_, i) => `/art/cappy/dance-${i + 1}.png`),
+  "/art/cappy/dance-sheet.png",
   "/art/cappy/alarm-sheet.png",
   "/art/cappy/microphone-sheet.png",
   "/art/cappy/rest.png",
@@ -342,6 +355,20 @@ export default function CapySprite({
         const idx = soundEndedCallbacksRef.current.indexOf(onSoundEnded);
         if (idx !== -1) soundEndedCallbacksRef.current.splice(idx, 1);
       };
+    }
+
+    // Reduced motion accessibility: for breakdance celebration, hold the victory pose
+    if (
+      pose === "celebrating" &&
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      setFrameIdx(21); // Frame 22: pointing with sparkles
+      if (onFrameRef.current) onFrameRef.current(21);
+      const timer = setTimeout(() => {
+        if (onAnimationCompleteRef.current) onAnimationCompleteRef.current();
+      }, 1500);
+      return () => clearTimeout(timer);
     }
 
     // Standard sequence loop for other animations

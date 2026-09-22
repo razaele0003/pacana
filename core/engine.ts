@@ -1,4 +1,4 @@
-import { defaults, type JournalEntry, type Phase, type State } from "./model";
+import { defaults, type JournalEntry, type Phase, type State, type Task, type TodayGoal } from "./model";
 import { dayKey, nextClock } from "./schedule";
 export { defaults };
 export const remaining = (s: State, now: number) =>
@@ -19,10 +19,28 @@ export function startPhase(
   phase: Phase,
   task = "",
   category = "Study",
+  customDurationMs?: number,
 ) {
   if (s.timer && s.timer.status !== "complete")
     throw new Error("End the current timer first.");
-  const duration = s.settings[phase] * 60000;
+  let duration = customDurationMs;
+  if (duration === undefined && task && s.tasks) {
+    const matchedTask = s.tasks.find(
+      (t) => t.title.trim().toLowerCase() === task.trim().toLowerCase(),
+    );
+    if (matchedTask) {
+      if (phase === "focus" && matchedTask.focusDuration) {
+        duration = matchedTask.focusDuration * 60000;
+      } else if (phase === "short" && matchedTask.shortBreak) {
+        duration = matchedTask.shortBreak * 60000;
+      } else if (phase === "long" && matchedTask.longBreak) {
+        duration = matchedTask.longBreak * 60000;
+      }
+    }
+  }
+  if (duration === undefined) {
+    duration = s.settings[phase] * 60000;
+  }
   s.timer = {
     id: crypto.randomUUID(),
     phase,
@@ -124,6 +142,7 @@ export function reconcile(
         note: "",
       });
       s.rewards[`focus:${t.id}`] = Math.floor(t.duration / 60000);
+      recordTaskFocus(s, t.task, Math.floor(t.duration / 1000));
     }
     if (t.phase === "short") {
       s.completedCycle++;
@@ -290,3 +309,92 @@ export function focusTotal(s: State, from: number, to: number) {
 }
 export const totalXP = (s: State) =>
   Object.values(s.rewards).reduce((a, b) => a + b, 0);
+
+export function getTasks(s: State): Task[] {
+  return s.tasks || [];
+}
+
+export function addTask(
+  s: State,
+  task: Omit<Task, "id" | "createdAt" | "completedSessions" | "totalFocusSeconds" | "completed" | "order"> & {
+    id?: string;
+    createdAt?: number;
+    completedSessions?: number;
+    totalFocusSeconds?: number;
+    completed?: boolean;
+    order?: number;
+  },
+  now = Date.now(),
+) {
+  if (!s.tasks) s.tasks = [];
+  const newTask: Task = {
+    id: task.id || crypto.randomUUID(),
+    title: task.title.trim(),
+    category: task.category || "Study",
+    priority: task.priority || "medium",
+    dueDate: task.dueDate,
+    estimatedSessions: task.estimatedSessions ?? 2,
+    completedSessions: task.completedSessions ?? 0,
+    totalFocusSeconds: task.totalFocusSeconds ?? 0,
+    completed: task.completed ?? false,
+    createdAt: task.createdAt ?? now,
+    order: task.order ?? s.tasks.length,
+    focusDuration: task.focusDuration,
+    shortBreak: task.shortBreak,
+    longBreak: task.longBreak,
+  };
+  s.tasks.push(newTask);
+  return newTask;
+}
+
+export function updateTask(s: State, id: string, updates: Partial<Task>) {
+  if (!s.tasks) s.tasks = [];
+  const t = s.tasks.find((x) => x.id === id);
+  if (!t) return;
+  Object.assign(t, updates);
+  if (updates.title) t.title = updates.title.trim();
+}
+
+export function toggleTask(s: State, id: string, now = Date.now()) {
+  if (!s.tasks) s.tasks = [];
+  const t = s.tasks.find((x) => x.id === id);
+  if (!t) return;
+  t.completed = !t.completed;
+  t.completedAt = t.completed ? now : undefined;
+}
+
+export function deleteTask(s: State, id: string) {
+  if (!s.tasks) s.tasks = [];
+  const index = s.tasks.findIndex((x) => x.id === id);
+  if (index >= 0) {
+    s.tasks.splice(index, 1);
+  }
+}
+
+export function setTodayGoal(s: State, goal: Partial<TodayGoal>) {
+  if (!s.todayGoal) {
+    s.todayGoal = {
+      title: "Finish my lab report",
+      completed: false,
+      targetSessions: 4,
+      quote: "Discipline today, results tomorrow.",
+    };
+  }
+  Object.assign(s.todayGoal, goal);
+  if (goal.title) s.todayGoal.title = goal.title.trim();
+}
+
+export function recordTaskFocus(s: State, taskTitle: string, durationSeconds: number) {
+  if (!taskTitle || !s.tasks) return;
+  const t = s.tasks.find(
+    (x) => x.title.trim().toLowerCase() === taskTitle.trim().toLowerCase(),
+  );
+  if (t) {
+    t.totalFocusSeconds += durationSeconds;
+    t.completedSessions += 1;
+    if (t.estimatedSessions && t.completedSessions >= t.estimatedSessions && !t.completed) {
+      t.completed = true;
+      t.completedAt = Date.now();
+    }
+  }
+}
