@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { CapyPose } from "../../components/capy-sprite";
-import { playCompanionSound } from "../companion-sound";
+import { playCompanionSound, playBreakdanceCelebration } from "../companion-sound";
 import {
   Point,
   Rect,
@@ -28,6 +28,7 @@ export type CompanionMode =
   | "curious"
   | "happy"
   | "shouting"
+  | "celebrating"
   | "idle";
 
 export type CapyGoalType =
@@ -48,7 +49,9 @@ export type EmoteType =
   | "thinking"
   | "reading"
   | "read"
-  | "rest";
+  | "rest"
+  | "dance"
+  | "celebrating";
 
 export interface ActiveEmote {
   type: EmoteType;
@@ -112,7 +115,7 @@ export function useAutonomousCapy({
 
   const currentGoalRef = useRef<CapyGoalType>("wander");
   const interruptedGoalRef = useRef<CapyGoalType | null>(null);
-  const temporaryActionRef = useRef<"happy" | "curious" | "reading" | "resting" | "planting" | "microphone" | null>(null);
+  const temporaryActionRef = useRef<"happy" | "curious" | "reading" | "resting" | "planting" | "microphone" | "celebrating" | null>(null);
   const isEmoteActiveRef = useRef<boolean>(false);
   const pausedWaypointsRef = useRef<Point[]>([]);
   const treeGrowthTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -194,6 +197,15 @@ export function useAutonomousCapy({
           resumeGoalRef.current();
         }
       }, 3500);
+    } else if (newMode === "celebrating") {
+      actionTimeoutRef.current = setTimeout(() => {
+        actionTimeoutRef.current = null;
+        if (modeRef.current === "celebrating") {
+          isEmoteActiveRef.current = false;
+          temporaryActionRef.current = null;
+          resumeGoalRef.current();
+        }
+      }, 4200);
     } else if (newMode === "waking") {
       actionTimeoutRef.current = setTimeout(() => {
         actionTimeoutRef.current = null;
@@ -236,10 +248,63 @@ export function useAutonomousCapy({
     viewportRef.current = viewport;
   }, []);
 
+  // Trigger breakdance celebration (~3.3-3.4s) synchronized with audio and sprite sheet
+  const triggerCelebration = useCallback(() => {
+    if (isDraggingRef.current) return;
+
+    if (modeRef.current === "resting" || currentGoalRef.current === "rest") {
+      if (sleepTimerRef.current) {
+        clearTimeout(sleepTimerRef.current);
+        sleepTimerRef.current = null;
+      }
+      if (!activeLeafRef.current || activeLeafRef.current.isBeingEaten) {
+        currentGoalRef.current = "wander";
+      }
+    }
+
+    isEmoteActiveRef.current = true;
+    temporaryActionRef.current = "celebrating";
+
+    if (emoteTimerRef.current) {
+      clearTimeout(emoteTimerRef.current);
+      emoteTimerRef.current = null;
+    }
+    if (transitionTimerRef.current) {
+      clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
+
+    // Temporarily pause waypoints without destroying persistent goal
+    if (waypointsRef.current.length > 0 && pausedWaypointsRef.current.length === 0) {
+      pausedWaypointsRef.current = [...waypointsRef.current];
+      waypointsRef.current = [];
+    }
+
+    setPose("celebrating");
+    changeMode("celebrating");
+    setActiveEmote(null);
+
+    // Play synchronized breakdance audio
+    playBreakdanceCelebration(true);
+
+    const celebrationDuration = 3400; // ~3.4s duration
+    emoteTimerRef.current = setTimeout(() => {
+      emoteTimerRef.current = null;
+      isEmoteActiveRef.current = false;
+      temporaryActionRef.current = null;
+      resumeGoalRef.current();
+    }, celebrationDuration);
+  }, [changeMode]);
+
   // Temporary Emote Trigger (~0.8 - 2.4s) - stationary world position, preserves persistent goal!
   // Ignores duplicate clicks while an emote is playing.
   const triggerEmote = useCallback(
     (type: EmoteType, duration = 1100) => {
+      if (type === "dance" || type === "celebrating") {
+        triggerCelebration();
+        return;
+      }
+
       if (
         isDraggingRef.current ||
         (isEmoteActiveRef.current && modeRef.current !== "resting") ||
@@ -1075,6 +1140,8 @@ export function useAutonomousCapy({
       modeRef.current === "reading" ||
       modeRef.current === "curious" ||
       modeRef.current === "happy" ||
+      modeRef.current === "celebrating" ||
+      pose === "celebrating" ||
       pose === "curious"
     ) {
       if (emoteTimerRef.current) {
@@ -1722,6 +1789,7 @@ export function useAutonomousCapy({
     activeLeaf,
     activeEmote,
     triggerEmote,
+    triggerCelebration,
     showHearts,
     showZzz: mode === "resting" || pose === "sleep",
     landingBounce,

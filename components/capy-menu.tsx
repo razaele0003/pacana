@@ -84,7 +84,21 @@ export default function CapyMenu({
         <span className="menu-emoji">📖</span>
       </button>
 
-      {/* 5. Rest / Wake toggle */}
+      {/* 5. Breakdance celebration */}
+      <button
+        type="button"
+        className="capy-menu-btn"
+        title="Breakdance (celebration dance)"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelectEmote("dance");
+        }}
+      >
+        <span className="menu-emoji">🕺</span>
+      </button>
+
+      {/* 6. Rest / Wake toggle */}
       <button
         type="button"
         className={`capy-menu-btn ${isResting ? "is-active" : ""}`}
