@@ -142,11 +142,11 @@ export default function WanderingCapybara() {
             onPointerDown={(e) => e.stopPropagation()}
           >
             <CapyMenu
-              isResting={npc.mode === "resting"}
+              isResting={npc.mode === "resting" || npc.pose === "sleep"}
               onSelectEmote={(type) =>
                 handleMenuAction(() => npc.triggerEmote(type))
               }
-              onToggleRest={() => handleMenuAction(() => npc.toggleSleep())}
+              onToggleRest={() => npc.toggleSleep()}
               onSpawnSnack={() => handleMenuAction(() => npc.spawnLeaf())}
               onPressFocus={() => handleMenuAction(() => npc.startPressFocus())}
             />

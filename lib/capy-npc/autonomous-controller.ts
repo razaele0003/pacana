@@ -617,7 +617,9 @@ export function useAutonomousCapy({
     currentGoalRef.current = "wander";
     changeMode("wander");
     setPose("walk");
-    planNextWander();
+    if (waypointsRef.current.length === 0) {
+      planNextWander();
+    }
   }, [startApproachingReadyLeaf, startPressFocus, planNextWander, changeMode]);
 
   resumeGoalRef.current = resumeGoal;
@@ -795,6 +797,14 @@ export function useAutonomousCapy({
       transitionTimerRef.current = null;
     }
 
+    currentGoalRef.current = "wander";
+    temporaryActionRef.current = null;
+    isEmoteActiveRef.current = false;
+    if (pausedWaypointsRef.current.length > 0) {
+      waypointsRef.current = [...pausedWaypointsRef.current];
+      pausedWaypointsRef.current = [];
+    }
+
     changeMode("waking");
     setPose("stretch"); // 10-frame stretch wakeup from Stretch wakeup.png
     playCompanionSound("pet");
@@ -822,17 +832,20 @@ export function useAutonomousCapy({
   }, [wakeUp, triggerEmote]);
 
   const toggleSleep = useCallback(() => {
-    if (modeRef.current === "resting") {
+    if (
+      modeRef.current === "resting" ||
+      pose === "sleep" ||
+      currentGoalRef.current === "rest"
+    ) {
       // Clicking sleep/wake button while already resting wakes Cappy!
       wakeUp();
       return;
     }
     if (
       modeRef.current === "waking" ||
-      isDraggingRef.current ||
-      isEmoteActiveRef.current
+      isDraggingRef.current
     ) {
-      // Ignore duplicate clicks while waking or during other emotes
+      // Ignore duplicate clicks while waking
       return;
     }
 
@@ -864,7 +877,7 @@ export function useAutonomousCapy({
     playCompanionSound("drop");
 
     // NO AUTO-WAKE TIMER: Cappy remains sleeping indefinitely until disturbed by drag, click, or other action emoji!
-  }, [wakeUp, changeMode]);
+  }, [wakeUp, changeMode, pose]);
 
   // Frame callback from CapySprite (for precise button press timing)
   const onFrame = useCallback((frameIdx: number) => {
