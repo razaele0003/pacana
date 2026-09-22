@@ -217,63 +217,104 @@ export default function InteractiveCompanion({
   useEffect(() => {
     if (!isDockedContainer) return;
 
-    // Start background growth for the cushion plant if it's currently planted or sprouting
-    if (
-      cushionSeedState.stage !== "none" &&
-      cushionSeedState.stage !== "ready" &&
-      cushionSeedState.stage !== "being_eaten"
-    ) {
+    const startGrowthInterval = (speedMs = 400) => {
       if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
-      let currentStage = cushionSeedState.treeStage || 2;
       growthIntervalRef.current = setInterval(() => {
-        currentStage += 1;
-        if (currentStage >= 10) {
-          if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
-          updateCushionSeed("ready", 10);
-        } else {
-          updateCushionSeed("sprouting", currentStage);
+        setCushionSeedState((prev) => {
+          if (prev.stage === "none" || prev.stage === "being_eaten") {
+            return prev;
+          }
+          const nextStage = (prev.treeStage || 2) + 1;
+          if (nextStage >= 10) {
+            if (growthIntervalRef.current) {
+              clearInterval(growthIntervalRef.current);
+              growthIntervalRef.current = null;
+            }
+            sharedCushionSeedStage = "ready";
+            sharedCushionTreeStage = 10;
+            return { stage: "ready", treeStage: 10 };
+          }
+          sharedCushionSeedStage = "sprouting";
+          sharedCushionTreeStage = nextStage;
+          return { stage: "sprouting", treeStage: nextStage };
+        });
+      }, speedMs);
+    };
+
+    const triggerSeedDropAndGrowth = () => {
+      if (fallTimerRef.current) clearTimeout(fallTimerRef.current);
+      if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
+
+      // A seed falls onto the cushion shortly after Capy is dragged out (~500ms)
+      fallTimerRef.current = setTimeout(() => {
+        setCushionSeedState({ stage: "falling", treeStage: 1 });
+        sharedCushionSeedStage = "falling";
+        sharedCushionTreeStage = 1;
+        playCompanionSound("pop");
+
+        fallTimerRef.current = setTimeout(() => {
+          setCushionSeedState({ stage: "planted", treeStage: 2 });
+          sharedCushionSeedStage = "planted";
+          sharedCushionTreeStage = 2;
+          startGrowthInterval(400);
+        }, 450);
+      }, 500);
+    };
+
+    // If Capy is floating and no seed/plant exists on cushion, start growing!
+    if (isFloating) {
+      if (sharedCushionSeedStage === "none") {
+        triggerSeedDropAndGrowth();
+      } else {
+        // Restore existing plant state
+        setCushionSeedState({
+          stage: sharedCushionSeedStage,
+          treeStage: sharedCushionTreeStage,
+        });
+        if (sharedCushionSeedStage !== "ready" && sharedCushionSeedStage !== "being_eaten") {
+          startGrowthInterval(400);
         }
-      }, 400);
+      }
+    } else {
+      // Not floating: Capy is docked on cushion, so no plant
+      if (fallTimerRef.current) clearTimeout(fallTimerRef.current);
+      if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
+      setCushionSeedState({ stage: "none", treeStage: 1 });
+      sharedCushionSeedStage = "none";
+      sharedCushionTreeStage = 1;
     }
 
     const handleDraggedOut = () => {
-      updateCushionSeed("none", 1);
-      if (fallTimerRef.current) clearTimeout(fallTimerRef.current);
-      if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
-      // A seed will fall onto the cushion a couple seconds after drop (~1.4s)
-      fallTimerRef.current = setTimeout(() => {
-        updateCushionSeed("falling", 1);
-        playCompanionSound("pop");
-        setTimeout(() => {
-          updateCushionSeed("planted", 2);
-          let currentStage = 2;
-          if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
-          growthIntervalRef.current = setInterval(() => {
-            currentStage += 1;
-            if (currentStage >= 10) {
-              if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
-              updateCushionSeed("ready", 10);
-            } else {
-              updateCushionSeed("sprouting", currentStage);
-            }
-          }, 400);
-        }, 450);
-      }, 1400);
+      triggerSeedDropAndGrowth();
     };
 
     const handleCallHome = () => {
-      // Handled by floating companion navigation
+      // Speed up tree growth so it reaches stage 10 (ready) rapidly before Cappy arrives
+      setCushionSeedState((prev) => {
+        if (prev.stage === "none") {
+          sharedCushionSeedStage = "planted";
+          sharedCushionTreeStage = 2;
+          return { stage: "planted", treeStage: 2 };
+        }
+        return prev;
+      });
+      startGrowthInterval(150);
     };
 
     const handleArrivedHome = () => {
       if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
-      if (sharedCushionSeedStage !== "none") {
-        updateCushionSeed("being_eaten", sharedCushionTreeStage);
-        playCompanionSound("snack");
-        setTimeout(() => {
-          updateCushionSeed("none", 1);
-        }, 1200);
-      }
+      if (fallTimerRef.current) clearTimeout(fallTimerRef.current);
+
+      setCushionSeedState({ stage: "being_eaten", treeStage: 10 });
+      sharedCushionSeedStage = "being_eaten";
+      sharedCushionTreeStage = 10;
+      playCompanionSound("snack");
+
+      setTimeout(() => {
+        setCushionSeedState({ stage: "none", treeStage: 1 });
+        sharedCushionSeedStage = "none";
+        sharedCushionTreeStage = 1;
+      }, 1200);
     };
 
     window.addEventListener("pacana:cappy-dragged-out", handleDraggedOut);
@@ -287,7 +328,7 @@ export default function InteractiveCompanion({
       window.removeEventListener("pacana:call-cappy-home", handleCallHome);
       window.removeEventListener("pacana:cappy-arrived-home", handleArrivedHome);
     };
-  }, [isDockedContainer, cushionSeedState.stage, cushionSeedState.treeStage]);
+  }, [isDockedContainer, isFloating]);
 
   // Handle timer completion shouting animation (for docked cushion only; floating Cappy is handled by autonomous-controller)
   const lastHandledTimerRef = useRef<string | null>(null);
@@ -326,26 +367,6 @@ export default function InteractiveCompanion({
         npc.wakeUp();
       }
 
-      // Speed up tree growth so the tree visibly and rapidly grows to stage 10 before Cappy arrives!
-      if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
-      if (sharedCushionSeedStage === "none") {
-        updateCushionSeed("planted", 2);
-      }
-      let currentStage = sharedCushionTreeStage || 2;
-      if (currentStage < 10) {
-        growthIntervalRef.current = setInterval(() => {
-          currentStage += 1;
-          if (currentStage >= 10) {
-            if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
-            updateCushionSeed("ready", 10);
-          } else {
-            updateCushionSeed("sprouting", currentStage);
-          }
-        }, 150);
-      } else {
-        updateCushionSeed("ready", 10);
-      }
-
       const focusTabBtn =
         (document.querySelector('[data-capybara-target="nav-focus"]') as HTMLElement | null) ||
         (document.querySelector('button[data-tab="Focus"]') as HTMLElement | null);
@@ -379,31 +400,16 @@ export default function InteractiveCompanion({
 
         // Cappy physically moves across the screen pursuing the tree/cushion dynamically even as user scrolls
         npc.walkToPoint(getHomeTarget, () => {
-          // Tree is guaranteed to be fully grown when Cappy gets to the tree!
-          if (growthIntervalRef.current) clearInterval(growthIntervalRef.current);
-          updateCushionSeed("ready", 10);
+          window.dispatchEvent(new CustomEvent("pacana:cappy-arrived-home"));
+          npc.setMode("eating");
+          npc.setPose("eating");
+          playCompanionSound("snack");
 
-          // Check whether there are leaves/plant on the cushion
-          if (sharedCushionSeedStage !== "none") {
-            window.dispatchEvent(new CustomEvent("pacana:cappy-arrived-home"));
-            updateCushionSeed("being_eaten", 10);
-            npc.setMode("eating");
-            npc.setPose("eating");
-            playCompanionSound("snack");
-
-            setTimeout(() => {
-              updateCushionSeed("none", 1);
-              npc.setPose("idle");
-              setDockedPose("idle");
-              onToggleFloating(false);
-            }, 1200);
-          } else {
-            // No plant on cushion: return directly to idle position on the cushion
-            window.dispatchEvent(new CustomEvent("pacana:cappy-arrived-home"));
+          setTimeout(() => {
             npc.setPose("idle");
             setDockedPose("idle");
             onToggleFloating(false);
-          }
+          }, 1200);
         });
       };
 
