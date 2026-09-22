@@ -20,7 +20,15 @@
     <meta name="apple-mobile-web-app-title" content="Pacana" />
     <meta name="theme-color" content="#2e4333" />
     <link rel="canonical" href="https://pacana-three.vercel.app/" />
-    <link rel="icon" href="/favicon.svg" />
+
+    <!-- Favicon & App Icons (Google Search, Apple, Android, Browsers) -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="manifest" href="/site.webmanifest" />
 
     <!-- Search Engine Specific Directives (SEO, Privacy, Regional) -->
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
@@ -57,6 +65,17 @@
       {
         "@context": "https://schema.org",
         "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://pacana-three.vercel.app/#website",
+            "name": "Pacana",
+            "alternateName": [
+              "Pacana Timer",
+              "Pacana App",
+              "Pacana Pomodoro"
+            ],
+            "url": "https://pacana-three.vercel.app/"
+          },
           {
             "@type": "WebApplication",
             "@id": "https://pacana-three.vercel.app/#webapp",
