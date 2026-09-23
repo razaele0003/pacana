@@ -321,6 +321,40 @@ let currentSourceNode: AudioBufferSourceNode | null = null;
 let currentCelebrationAudio: HTMLAudioElement | null = null;
 
 /**
+ * Preload and pre-synthesize celebration audio buffer to eliminate any latency
+ * when Cappy performs the breakdance celebration.
+ */
+export function preloadCelebrationAudio(): void {
+  if (typeof window === "undefined") return;
+
+  // 1. Preload Web Audio buffer
+  try {
+    const ctx = getContext();
+    if (ctx) {
+      if (ctx.state === "suspended") {
+        void ctx.resume();
+      }
+      if (
+        !cachedCelebrationBuffer ||
+        cachedCelebrationBuffer.sampleRate !== ctx.sampleRate
+      ) {
+        cachedCelebrationBuffer = createCelebrationBuffer(ctx);
+      }
+    }
+  } catch (err) {
+    console.warn("[Pacana Audio] Preload celebration buffer failed:", err);
+  }
+
+  // 2. Preload HTML5 Audio fallback element
+  try {
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.src = "/sounds/task-complete-breakdance.mp3";
+    audio.load();
+  } catch {}
+}
+
+/**
  * Play synchronized breakbeat audio for Cappy's task-completion celebration.
  * Respects sound settings (soundEnabled) and plays via Web Audio API primary engine
  * (or HTMLAudioElement fallback).

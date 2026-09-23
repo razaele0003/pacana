@@ -91,11 +91,25 @@ export function useAutonomousCapy({
   isFullScreen = false,
 }: UseAutonomousCapyOptions) {
   const [pos, setPos] = useState<Point>(() => initialPos || { x: 500, y: 400 });
-  const [facing, setFacing] = useState<"left" | "right">(() => {
+  const [facing, setFacingState] = useState<"left" | "right">(() => {
     const initX = initialPos?.x ?? 500;
     const vpW = typeof window !== "undefined" ? window.innerWidth : 1200;
     return initX > vpW * 0.5 ? "left" : "right";
   });
+  const facingRef = useRef<"left" | "right">(
+    initialPos?.x && initialPos.x > (typeof window !== "undefined" ? window.innerWidth : 1200) * 0.5
+      ? "left"
+      : "right"
+  );
+  useEffect(() => {
+    facingRef.current = facing;
+  }, [facing]);
+
+  const setFacing = useCallback((newFacing: "left" | "right") => {
+    facingRef.current = newFacing;
+    setFacingState(newFacing);
+  }, []);
+
   const [pose, setPose] = useState<CapyPose>("walk");
   const [mode, setMode] = useState<CompanionMode>("wander");
   const [activeLeaf, setActiveLeaf] = useState<SpawnedLeaf | null>(null);
@@ -444,35 +458,55 @@ export function useAutonomousCapy({
       const vp = viewportRef.current;
       const current = posRef.current;
 
+      const clientW =
+        typeof document !== "undefined"
+          ? document.documentElement.clientWidth || vp.width
+          : vp.width;
+      const clientH =
+        typeof document !== "undefined"
+          ? document.documentElement.clientHeight || vp.height
+          : vp.height;
+      const screenW = Math.min(vp.width, clientW);
+      const screenH = Math.min(vp.height, clientH);
+
+      const minX = 24;
+      const maxX = Math.max(minX + 40, screenW - 88 - 24);
+      const minY = 48;
+      const maxY = Math.max(minY + 40, screenH - 88 - 20);
+
       // Bias destination: if on right half, walk left towards the room; if on left half, walk right
       const preferredSide: "left" | "right" | undefined =
         forcedSide ??
-        (current.x > vp.width * 0.55
+        (current.x > screenW * 0.55
           ? "left"
-          : current.x < vp.width * 0.42
+          : current.x < screenW * 0.42
           ? "right"
           : undefined);
 
-      // Pick a random destination in available screen space without obstacle restrictions
-      const minX = 32;
-      const maxX = Math.max(minX + 50, vp.width - 80);
-      const minY = 48;
-      const maxY = Math.max(minY + 50, vp.height - 90);
-
       let targetX: number;
       if (preferredSide === "left") {
-        targetX = minX + Math.random() * (Math.max(minX + 50, vp.width * 0.45) - minX);
+        targetX = minX + Math.random() * (Math.max(minX + 40, screenW * 0.45) - minX);
       } else if (preferredSide === "right") {
-        const startX = Math.min(maxX - 50, vp.width * 0.55);
+        const startX = Math.min(maxX - 40, screenW * 0.55);
         targetX = startX + Math.random() * (maxX - startX);
       } else {
         targetX = minX + Math.random() * (maxX - minX);
       }
       const targetY = minY + Math.random() * (maxY - minY);
-      const target: Point = {
+      let target: Point = {
         x: Math.round(Math.max(minX, Math.min(maxX, targetX))),
         y: Math.round(Math.max(minY, Math.min(maxY, targetY))),
       };
+
+      // Ensure minimum travel distance (>= 55px) so Capy doesn't pick a target within arrival threshold
+      const distToTarget = Math.hypot(target.x - current.x, target.y - current.y);
+      if (distToTarget < 55) {
+        if (current.x > screenW * 0.5) {
+          target.x = Math.max(minX, target.x - 70);
+        } else {
+          target.x = Math.min(maxX, target.x + 70);
+        }
+      }
 
       // Direct straight path to destination (no obstacle blocking)
       const path: Point[] = [target];
@@ -917,6 +951,10 @@ export function useAutonomousCapy({
       clearTimeout(emoteTimerRef.current);
       emoteTimerRef.current = null;
     }
+    if (sleepTimerRef.current) {
+      clearTimeout(sleepTimerRef.current);
+      sleepTimerRef.current = null;
+    }
 
     waypointsRef.current = [];
     currentGoalRef.current = "alarm";
@@ -1318,17 +1356,29 @@ export function useAutonomousCapy({
 
       const cur = posRef.current;
 
+      // Sanity check for NaN coordinates to recover Capy immediately if corrupted
+      if (isNaN(cur.x) || isNaN(cur.y)) {
+        const safePos: Point = {
+          x: Math.round(screenW * 0.5),
+          y: Math.round(screenH * 0.5),
+        };
+        posRef.current = safePos;
+        setPos(safePos);
+        cur.x = safePos.x;
+        cur.y = safePos.y;
+      }
+
       // Active Wall Collision & Reversal in Wander Mode:
       // If Cappy touches or reaches near a wall, immediately turn around and walk away into open space
       if (currentMode === "wander" && !isDraggingRef.current) {
-        // Hitting Right Wall while facing or moving right
+        // Hitting Right Wall while facing right or moving towards it
         if (
           cur.x >= maxX - 6 &&
-          (facing === "right" ||
+          (facingRef.current === "right" ||
             (waypointsRef.current.length > 0 && waypointsRef.current[0].x >= cur.x))
         ) {
           const clamped: Point = {
-            x: maxX,
+            x: maxX - 12,
             y: Math.max(minY, Math.min(maxY, cur.y)),
           };
           posRef.current = clamped;
@@ -1340,14 +1390,14 @@ export function useAutonomousCapy({
           return;
         }
 
-        // Hitting Left Wall while facing or moving left
+        // Hitting Left Wall while facing left or moving towards it
         if (
           cur.x <= minX + 6 &&
-          (facing === "left" ||
+          (facingRef.current === "left" ||
             (waypointsRef.current.length > 0 && waypointsRef.current[0].x <= cur.x))
         ) {
           const clamped: Point = {
-            x: minX,
+            x: minX + 12,
             y: Math.max(minY, Math.min(maxY, cur.y)),
           };
           posRef.current = clamped;
@@ -1355,6 +1405,42 @@ export function useAutonomousCapy({
           setFacing("right");
           waypointsRef.current = [];
           planNextWander("right");
+          animFrameId = requestAnimationFrame(tick);
+          return;
+        }
+
+        // Hitting Bottom Wall while moving down towards it
+        if (
+          cur.y >= maxY - 6 &&
+          waypointsRef.current.length > 0 &&
+          waypointsRef.current[0].y >= cur.y
+        ) {
+          const clamped: Point = {
+            x: Math.max(minX, Math.min(maxX, cur.x)),
+            y: maxY - 12,
+          };
+          posRef.current = clamped;
+          setPos(clamped);
+          waypointsRef.current = [];
+          planNextWander();
+          animFrameId = requestAnimationFrame(tick);
+          return;
+        }
+
+        // Hitting Top Wall while moving up towards it
+        if (
+          cur.y <= minY + 6 &&
+          waypointsRef.current.length > 0 &&
+          waypointsRef.current[0].y <= cur.y
+        ) {
+          const clamped: Point = {
+            x: Math.max(minX, Math.min(maxX, cur.x)),
+            y: minY + 12,
+          };
+          posRef.current = clamped;
+          setPos(clamped);
+          waypointsRef.current = [];
+          planNextWander();
           animFrameId = requestAnimationFrame(tick);
           return;
         }
@@ -1572,12 +1658,16 @@ export function useAutonomousCapy({
           }
         } else {
           // Step along path, strictly clamped within screen boundaries
-          const moveX = Math.max(minX, Math.min(maxX, cur.x + (dx / dist) * stepDist));
-          const moveY = Math.max(minY, Math.min(maxY, cur.y + (dy / dist) * stepDist));
-          const nextPos: Point = { x: moveX, y: moveY };
-          posRef.current = nextPos;
-          setPos(nextPos);
-          if (onPosChange) onPosChange(nextPos);
+          if (dist > 0.001) {
+            const moveX = Math.max(minX, Math.min(maxX, cur.x + (dx / dist) * stepDist));
+            const moveY = Math.max(minY, Math.min(maxY, cur.y + (dy / dist) * stepDist));
+            const nextPos: Point = { x: moveX, y: moveY };
+            posRef.current = nextPos;
+            setPos(nextPos);
+            if (onPosChange) onPosChange(nextPos);
+          } else {
+            waypointsRef.current.shift();
+          }
         }
       }
 
@@ -1631,7 +1721,7 @@ export function useAutonomousCapy({
         !isUserResting &&
         !isShouting &&
         lastMovementOrActionTimeRef.current > 0 &&
-        timeSinceLastMove > 5000
+        timeSinceLastMove > 4000
       ) {
         lastMovementOrActionTimeRef.current = time;
 
@@ -1657,10 +1747,16 @@ export function useAutonomousCapy({
         setActiveEmote(null);
         setShowHearts(false);
 
+        const safeX = Math.max(minX, Math.min(maxX, cur.x));
+        const safeY = Math.max(minY, Math.min(maxY, cur.y));
+        const safePos: Point = { x: safeX, y: safeY };
+        posRef.current = safePos;
+        setPos(safePos);
+        lastMovedPosRef.current = { x: safeX, y: safeY };
+
         waypointsRef.current = [];
         pausedWaypointsRef.current = [];
         stalledFramesCountRef.current = 0;
-        lastMovedPosRef.current = { x: cur.x, y: cur.y };
         currentGoalRef.current = "wander";
         changeMode("wander");
         setPose("walk");

@@ -1120,11 +1120,13 @@ export default function Pacana() {
                 <div className="kind-note">
                   <SidebarCompanion
                     pose={
-                      phase !== "focus"
-                        ? "rest"
-                        : timer?.status === "running"
-                          ? "study"
-                          : "idle"
+                      timer?.status === "complete"
+                        ? "shout"
+                        : phase !== "focus"
+                          ? "rest"
+                          : timer?.status === "running"
+                            ? "study"
+                            : "idle"
                     }
                     isFloating={isCompanionFloating}
                     onToggleFloating={handleToggleCompanion}
@@ -1359,11 +1361,13 @@ export default function Pacana() {
           onToggleFloating={handleToggleCompanion}
           initialPos={companionDropPos || undefined}
           externalPose={
-            phase !== "focus"
-              ? "rest"
-              : timer?.status === "running"
-                ? "study"
-                : "idle"
+            timer?.status === "complete"
+              ? "shout"
+              : phase !== "focus"
+                ? "rest"
+                : timer?.status === "running"
+                  ? "study"
+                  : "idle"
           }
         />
       )}

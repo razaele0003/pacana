@@ -5,7 +5,11 @@ import CapySprite, { CapyPose } from "./capy-sprite";
 import CapyLeaf from "./capy-leaf";
 import CapyEmoteBubble from "./capy-emote-bubble";
 import CapyMenu from "./capy-menu";
-import { playCompanionSound, stopBreakdanceCelebration } from "../lib/companion-sound";
+import {
+  playCompanionSound,
+  stopBreakdanceCelebration,
+  preloadCelebrationAudio,
+} from "../lib/companion-sound";
 import { useAutonomousCapy, EmoteType } from "../lib/capy-npc/autonomous-controller";
 import type { Point } from "../lib/capy-npc/obstacle-manager";
 import { Home, Move } from "lucide-react";
@@ -203,10 +207,23 @@ export default function InteractiveCompanion({
   });
   const rootRef = useRef<HTMLDivElement>(null);
 
+  // Pre-warm celebration audio so breakdance sound starts with zero latency
+  useEffect(() => {
+    preloadCelebrationAudio();
+    const handleFirstPointer = () => {
+      preloadCelebrationAudio();
+    };
+    window.addEventListener("pointerdown", handleFirstPointer, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", handleFirstPointer);
+    };
+  }, []);
+
   // Sync external pose when docked
   useEffect(() => {
     if (isDockedContainer && externalPose) {
-      if (externalPose === "celebrate") setDockedPose("pet");
+      if (externalPose === "shout") setDockedPose("shout");
+      else if (externalPose === "celebrate") setDockedPose("pet");
       else if (externalPose === "rest") setDockedPose("sleep");
       else if (externalPose === "study" || externalPose === "idle")
         setDockedPose("idle");
@@ -902,6 +919,7 @@ export default function InteractiveCompanion({
         }}
         onPointerDown={handleFloatingPointerDown}
         onMouseEnter={() => {
+          preloadCelebrationAudio();
           if (!npc.activeEmote) {
             setMenuSuppressed(false);
             setIsHovered(true);

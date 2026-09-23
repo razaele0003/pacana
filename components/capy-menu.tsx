@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { EmoteType } from "../lib/capy-npc/autonomous-controller";
+import { preloadCelebrationAudio } from "../lib/companion-sound";
 
 interface CapyMenuProps {
   isResting: boolean;
@@ -89,7 +90,12 @@ export default function CapyMenu({
         type="button"
         className="capy-menu-btn"
         title="Breakdance (celebration dance)"
-        onPointerDown={(e) => e.stopPropagation()}
+        onPointerEnter={() => preloadCelebrationAudio()}
+        onMouseEnter={() => preloadCelebrationAudio()}
+        onPointerDown={(e) => {
+          preloadCelebrationAudio();
+          e.stopPropagation();
+        }}
         onClick={(e) => {
           e.stopPropagation();
           onSelectEmote("dance");
