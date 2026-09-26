@@ -100,6 +100,20 @@ test("custom ringtones validate and preserve through backup", () => {
   assert.equal(parsed.settings.customRingtones?.length, 2);
   assert.equal(parsed.settings.customRingtones?.[1].data, "pacana://app/audio/ringtone-123.mp3");
 });
+test("minimize to tray preference defaults to false and preserves through backup", () => {
+  const initial = defaults();
+  assert.equal(initial.settings.minimizeToTray, false);
+  const parsedDefault = parseBackup(JSON.parse(JSON.stringify(initial)));
+  assert.equal(parsedDefault.settings.minimizeToTray, false);
+
+  const oldBackup = JSON.parse(JSON.stringify(initial));
+  delete oldBackup.settings.minimizeToTray;
+  assert.equal(parseBackup(oldBackup).settings.minimizeToTray, false);
+
+  initial.settings.minimizeToTray = true;
+  const parsedEnabled = parseBackup(JSON.parse(JSON.stringify(initial)));
+  assert.equal(parsedEnabled.settings.minimizeToTray, true);
+});
 test("deleting records and clearing a journal day preserves focus progress", () => {
   const state = defaults("UTC");
   state.sessions.push({

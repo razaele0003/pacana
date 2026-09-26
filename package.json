@@ -1,6 +1,6 @@
 {
   "name": "pacana",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "license": "UNLICENSED",
   "engines": {
@@ -19,6 +19,7 @@
     "desktop": "electron desktop/main.cjs",
     "desktop:check": "node --test desktop/paths.test.cjs",
     "desktop:smoke": "electron desktop/main.cjs --smoke",
+    "desktop:tray": "electron desktop/main.cjs --test-tray",
     "desktop:package": "npm run build:vercel && node scripts/desktop-package.mjs",
     "desktop:installer": "npm run desktop:package && node scripts/build-installer.mjs"
   },

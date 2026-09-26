@@ -79,6 +79,7 @@ const schema = z.object({
     autoPromptCheckin: z.boolean().optional().default(true),
     notifications: z.boolean(),
     onboarded: z.boolean(),
+    minimizeToTray: z.boolean().optional().default(false),
   }),
   timer: z
     .object({

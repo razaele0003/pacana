@@ -16,6 +16,7 @@ const {
   session,
   dialog,
   ipcMain,
+  Notification: ElectronNotification,
 } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs/promises");
@@ -23,13 +24,16 @@ const crypto = require("node:crypto");
 const { resolveAsset } = require("./paths.cjs");
 const smoke = process.argv.includes("--smoke");
 const testFullscreen = process.argv.includes("--test-fullscreen");
+const testTray = process.argv.includes("--test-tray");
 app.setName("Pacana");
 app.setAppUserModelId("com.pacana.desktop");
 app.setPath(
   "userData",
   path.join(
     app.getPath("appData"),
-    smoke || testFullscreen ? "Pacana-Desktop-Smoke" : "Pacana-Desktop",
+    smoke || testFullscreen || testTray
+      ? (testTray ? "Pacana-Desktop-TrayTest" : "Pacana-Desktop-Smoke")
+      : "Pacana-Desktop",
   ),
 );
 protocol.registerSchemesAsPrivileged([
@@ -46,20 +50,30 @@ protocol.registerSchemesAsPrivileged([
 let window;
 let tray = null;
 let isQuitting = false;
-let minimizeToTray = true;
+let minimizeToTray = false;
+
+function restoreAndFocusWindow() {
+  if (window && !window.isDestroyed()) {
+    if (window.isMinimized()) window.restore();
+    if (!window.isVisible()) window.show();
+    window.focus();
+  }
+}
 
 app.on("before-quit", () => {
   isQuitting = true;
+  if (tray && !tray.isDestroyed()) {
+    try {
+      tray.destroy();
+      tray = null;
+    } catch {}
+  }
 });
 
-if (!smoke && !testFullscreen && !app.requestSingleInstanceLock()) app.quit();
+if (!smoke && !testFullscreen && !testTray && !app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", () => {
-    if (window) {
-      if (window.isMinimized()) window.restore();
-      if (!window.isVisible()) window.show();
-      window.focus();
-    }
+    restoreAndFocusWindow();
   });
   app
     .whenReady()
@@ -200,6 +214,50 @@ else {
       }
 
       const savedState = await getSavedWindowState();
+
+      const desktopSettingsFile = path.join(
+        app.getPath("userData"),
+        "desktop-settings.json",
+      );
+
+      async function getSavedDesktopSettings() {
+        try {
+          const raw = await fs.readFile(desktopSettingsFile, "utf8");
+          return JSON.parse(raw);
+        } catch {
+          return { minimizeToTray: false };
+        }
+      }
+
+      async function persistDesktopSettings(data) {
+        try {
+          await fs.writeFile(desktopSettingsFile, JSON.stringify(data, null, 2));
+        } catch {}
+      }
+
+      const savedDesktop = await getSavedDesktopSettings();
+      minimizeToTray = Boolean(savedDesktop.minimizeToTray);
+
+      const trayIcons = {
+        idle: path.join(__dirname, "tray-icon.png"),
+        focus: path.join(__dirname, "tray-icon-focus.png"),
+        break: path.join(__dirname, "tray-icon-break.png"),
+        paused: path.join(__dirname, "tray-icon-paused.png"),
+      };
+      let currentTrayState = "idle";
+
+      function updateTrayIcon(state) {
+        if (!tray || tray.isDestroyed()) return;
+        if (currentTrayState === state) return;
+        currentTrayState = state;
+        const iconPath = trayIcons[state] || trayIcons.idle;
+        try {
+          tray.setImage(nativeImage.createFromPath(iconPath));
+        } catch {}
+      }
+
+      let updateTrayMenu = () => {};
+
       const iconPath = path.join(__dirname, "icon.png");
       window = new BrowserWindow({
         title: "Pacana",
@@ -319,6 +377,68 @@ else {
 
       ipcMain.handle("window:isFullscreen", () => {
         return window && !window.isDestroyed() ? window.isFullScreen() : false;
+      });
+
+      ipcMain.handle("desktop:setMinimizeToTray", async (_event, enabled) => {
+        minimizeToTray = Boolean(enabled);
+        await persistDesktopSettings({ minimizeToTray });
+        updateTrayMenu();
+        return minimizeToTray;
+      });
+
+      ipcMain.handle("desktop:getMinimizeToTray", () => minimizeToTray);
+
+      ipcMain.handle("window:restore", () => {
+        restoreAndFocusWindow();
+        return true;
+      });
+
+      let currentTimerStatus = "idle";
+      let currentTimerPhase = "focus";
+
+      function sendTimerCommand(command) {
+        if (window && !window.isDestroyed()) {
+          window.webContents.send("timer:command", command);
+        }
+      }
+
+      ipcMain.on("timer:status-update", (_event, status) => {
+        if (!tray || tray.isDestroyed()) return;
+        if (status && status.tooltip) {
+          try {
+            tray.setToolTip(status.tooltip);
+          } catch {}
+        }
+        if (status && status.trayState) {
+          updateTrayIcon(status.trayState);
+        }
+        if (status) {
+          const nextStatus = status.status || "idle";
+          const nextPhase = status.phase || "focus";
+          if (nextStatus !== currentTimerStatus || nextPhase !== currentTimerPhase) {
+            currentTimerStatus = nextStatus;
+            currentTimerPhase = nextPhase;
+            updateTrayMenu();
+          }
+        }
+      });
+
+      ipcMain.on("desktop:show-notification", (_event, { title, body }) => {
+        if (ElectronNotification && ElectronNotification.isSupported()) {
+          try {
+            const notif = new ElectronNotification({
+              title: title || "Pacana",
+              body: body || "Your session is complete. Take a little breath.",
+              icon: path.join(__dirname, "icon.png"),
+            });
+            notif.on("click", () => {
+              restoreAndFocusWindow();
+            });
+            notif.show();
+          } catch (err) {
+            console.warn("Failed to show native desktop notification:", err);
+          }
+        }
       });
       window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
       window.webContents.on("will-navigate", (event, url) => {
@@ -459,25 +579,69 @@ else {
           const trayIconPath = path.join(__dirname, "tray-icon.png");
           const trayIcon = nativeImage.createFromPath(trayIconPath);
           tray = new Tray(trayIcon);
-          tray.setToolTip("Pacana — Cozy Focus & Time Journal");
+          tray.setToolTip("Pacana — Ready");
 
-          const updateTrayMenu = () => {
+          updateTrayMenu = () => {
+            if (!tray || tray.isDestroyed()) return;
             const loginSettings = app.getLoginItemSettings();
+
+            const timerItems = [];
+            if (currentTimerStatus === "running") {
+              timerItems.push(
+                {
+                  label: "Pause Session",
+                  click: () => sendTimerCommand("pause"),
+                },
+                {
+                  label: "Start Next Session",
+                  click: () => sendTimerCommand("next"),
+                },
+                {
+                  label: "End Session",
+                  click: () => sendTimerCommand("end"),
+                },
+              );
+            } else if (currentTimerStatus === "paused") {
+              timerItems.push(
+                {
+                  label: "Resume Session",
+                  click: () => sendTimerCommand("resume"),
+                },
+                {
+                  label: "Start Next Session",
+                  click: () => sendTimerCommand("next"),
+                },
+                {
+                  label: "End Session",
+                  click: () => sendTimerCommand("end"),
+                },
+              );
+            } else if (currentTimerStatus === "complete") {
+              timerItems.push({
+                label: "Start Next Session",
+                click: () => sendTimerCommand("next"),
+              });
+            } else {
+              timerItems.push({
+                label: "Start Focus Session",
+                click: () => sendTimerCommand("start-focus"),
+              });
+            }
+
             const contextMenu = Menu.buildFromTemplate([
               {
-                label: "Show Pacana",
+                label: "Open Pacana",
                 click: () => {
-                  if (window) {
-                    if (window.isMinimized()) window.restore();
-                    window.show();
-                    window.focus();
-                  }
+                  restoreAndFocusWindow();
                 },
               },
+              { type: "separator" },
+              ...timerItems,
+              { type: "separator" },
               {
                 label: "Toggle Fullscreen (F11)",
                 click: () => {
-                  if (window) {
+                  if (window && !window.isDestroyed()) {
                     if (!window.isVisible()) window.show();
                     window.setFullScreen(!window.isFullScreen());
                   }
@@ -500,9 +664,16 @@ else {
                 label: "Minimize to Tray on Close",
                 type: "checkbox",
                 checked: minimizeToTray,
-                click: (item) => {
+                click: async (item) => {
                   minimizeToTray = item.checked;
+                  await persistDesktopSettings({ minimizeToTray });
                   updateTrayMenu();
+                  if (window && !window.isDestroyed()) {
+                    window.webContents.send(
+                      "desktop:minimize-to-tray-change",
+                      minimizeToTray,
+                    );
+                  }
                 },
               },
               { type: "separator" },
@@ -510,6 +681,12 @@ else {
                 label: "Quit Pacana",
                 click: () => {
                   isQuitting = true;
+                  if (tray && !tray.isDestroyed()) {
+                    try {
+                      tray.destroy();
+                      tray = null;
+                    } catch {}
+                  }
                   app.quit();
                 },
               },
@@ -520,19 +697,10 @@ else {
           updateTrayMenu();
 
           tray.on("click", () => {
-            if (window) {
-              if (window.isVisible() && !window.isMinimized()) {
-                if (window.isFocused()) {
-                  window.hide();
-                } else {
-                  window.focus();
-                }
-              } else {
-                if (window.isMinimized()) window.restore();
-                window.show();
-                window.focus();
-              }
-            }
+            restoreAndFocusWindow();
+          });
+          tray.on("double-click", () => {
+            restoreAndFocusWindow();
           });
         } catch (err) {
           console.error("Failed to initialize tray:", err);
@@ -676,6 +844,143 @@ else {
           app.exit(1);
         }
       }
+      if (testTray) {
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          const checks = {};
+
+          // 1. Initial state checks
+          checks.initialMinimizeToTray = minimizeToTray;
+          if (minimizeToTray !== false) throw new Error(`minimizeToTray should default to false, got ${minimizeToTray}`);
+          if (!tray) throw new Error("System tray was not initialized");
+
+          // 2. Enable minimizeToTray via IPC
+          const setRes = await window.webContents.executeJavaScript(`
+            window.pacanaDesktop.setMinimizeToTray(true)
+          `);
+          checks.setMinimizeToTrayResult = setRes;
+          if (!setRes || !minimizeToTray) throw new Error("Failed to enable minimizeToTray via IPC");
+
+          const getRes = await window.webContents.executeJavaScript(`
+            window.pacanaDesktop.getMinimizeToTray()
+          `);
+          checks.getMinimizeToTrayResult = getRes;
+          if (!getRes) throw new Error("getMinimizeToTray() did not return true after setting");
+
+          // 3. Test minimize to tray on window close
+          window.close();
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          checks.windowHiddenOnClose = !window.isVisible();
+          checks.windowStillExists = !window.isDestroyed();
+          if (window.isVisible()) throw new Error("Window was not hidden when closed with minimizeToTray = true");
+          if (window.isDestroyed()) throw new Error("Window was unexpectedly destroyed when closed with minimizeToTray = true");
+
+          // 4. Test restore via restoreAndFocusWindow
+          restoreAndFocusWindow();
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          checks.windowRestoredAndVisible = window.isVisible();
+          if (!window.isVisible()) throw new Error("Window was not visible after restoreAndFocusWindow");
+
+          // 5. Test live timer status update
+          await window.webContents.executeJavaScript(`
+            window.pacanaDesktop.updateTimerStatus({
+              tooltip: "Pacana — Focus 25:00",
+              trayState: "focus"
+            })
+          `);
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          checks.trayStateFocus = currentTrayState === "focus";
+          if (currentTrayState !== "focus") throw new Error(`Expected tray state 'focus', got '${currentTrayState}'`);
+
+          // 6. Test break tray state
+          await window.webContents.executeJavaScript(`
+            window.pacanaDesktop.updateTimerStatus({
+              tooltip: "Pacana — Short Break 05:00",
+              trayState: "break"
+            })
+          `);
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          checks.trayStateBreak = currentTrayState === "break";
+          if (currentTrayState !== "break") throw new Error(`Expected tray state 'break', got '${currentTrayState}'`);
+
+          // 7. Test paused tray state
+          await window.webContents.executeJavaScript(`
+            window.pacanaDesktop.updateTimerStatus({
+              tooltip: "Pacana — Paused 05:00",
+              trayState: "paused"
+            })
+          `);
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          checks.trayStatePaused = currentTrayState === "paused";
+          if (currentTrayState !== "paused") throw new Error(`Expected tray state 'paused', got '${currentTrayState}'`);
+
+          // 8. Test ready tray state
+          await window.webContents.executeJavaScript(`
+            window.pacanaDesktop.updateTimerStatus({
+              tooltip: "Pacana — Ready",
+              trayState: "idle"
+            })
+          `);
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          checks.trayStateIdle = currentTrayState === "idle";
+          if (currentTrayState !== "idle") throw new Error(`Expected tray state 'idle', got '${currentTrayState}'`);
+
+          // Test showNotification
+          await window.webContents.executeJavaScript(`
+            window.pacanaDesktop.showNotification({
+              title: "Pacana · Focus Complete",
+              body: "Starting your break now."
+            })
+          `);
+          checks.notificationSent = true;
+
+          // Test session controls from tray
+          sendTimerCommand("start-focus");
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          checks.commandStartFocus = currentTrayState === "focus";
+
+          sendTimerCommand("pause");
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          checks.commandPause = currentTrayState === "paused";
+
+          sendTimerCommand("resume");
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          checks.commandResume = currentTrayState === "focus";
+
+          sendTimerCommand("next");
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          checks.commandNext = currentTrayState === "break";
+
+          sendTimerCommand("end");
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          checks.commandEnd = currentTrayState === "idle";
+
+          // 9. Test restore on second-instance while hidden
+          window.hide();
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          app.emit("second-instance");
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          checks.secondInstanceRestored = window.isVisible();
+          if (!window.isVisible()) throw new Error("Second instance did not restore hidden window");
+
+          // 10. Disable minimizeToTray and verify persistence
+          await window.webContents.executeJavaScript(`
+            window.pacanaDesktop.setMinimizeToTray(false)
+          `);
+          checks.disabledMinimizeToTray = minimizeToTray;
+          if (minimizeToTray !== false) throw new Error("Failed to disable minimizeToTray");
+
+          const savedDesktopSettings = await getSavedDesktopSettings();
+          checks.savedSettingMatches = savedDesktopSettings.minimizeToTray === false;
+          if (savedDesktopSettings.minimizeToTray !== false) throw new Error("desktop-settings.json was not updated");
+
+          console.log(JSON.stringify({ success: true, checks }));
+          app.exit(0);
+        } catch (error) {
+          console.error("Tray test failed:", error);
+          app.exit(1);
+        }
+      }
     })
     .catch((error) => {
       dialog.showErrorBox("Pacana could not open", error.message);
@@ -683,6 +988,12 @@ else {
     });
   app.on("window-all-closed", () => {
     if (isQuitting || smoke || !minimizeToTray) {
+      if (tray && !tray.isDestroyed()) {
+        try {
+          tray.destroy();
+          tray = null;
+        } catch {}
+      }
       app.quit();
     }
   });

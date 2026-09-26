@@ -305,8 +305,13 @@ export default function Pacana() {
       const current = Date.now();
       setNow(current);
       try {
+        const isDesktop =
+          typeof window !== "undefined" &&
+          (Boolean((window as any).pacanaDesktop) ||
+            window.location.protocol === "pacana:" ||
+            navigator.userAgent.includes("Electron"));
         const auto =
-          document.visibilityState === "visible" &&
+          (document.visibilityState === "visible" || isDesktop) &&
           lastTick.current > 0 &&
           current - lastTick.current < 2500;
         const { state: s, result } = await transact((s) =>
@@ -385,7 +390,23 @@ export default function Pacana() {
                 // Safety fallback in case sound fails or event is missed
                 fallbackTimer = setTimeout(startNextSession, 15000);
 
-                void alertUser(s.settings, "Pacana · A little check-in", text, {
+                const notifTitle =
+                  completedPhase === "focus"
+                    ? "Pacana · Focus Complete"
+                    : completedPhase === "short"
+                      ? "Pacana · Short Break Complete"
+                      : "Pacana · Long Break Complete";
+
+                const notifBody =
+                  completedPhase === "focus"
+                    ? (shouldAutoStart
+                        ? "Focus session complete. Starting your break now."
+                        : "Focus session complete. Take a little breath whenever you're ready.")
+                    : (shouldAutoStart
+                        ? "Break complete. Starting your next focus session now."
+                        : "Break complete. Open Pacana whenever you're ready to focus.");
+
+                void alertUser(s.settings, notifTitle, notifBody, {
                   forceSound: true,
                 }).then((soundPlayed) => {
                   if (live && !soundPlayed) {
@@ -396,7 +417,19 @@ export default function Pacana() {
                   }
                 });
               } else {
-                void alertUser(s.settings, "Pacana · A little check-in", text, {
+                const notifTitle =
+                  completedPhase === "focus"
+                    ? "Pacana · Focus Complete"
+                    : completedPhase === "short"
+                      ? "Pacana · Short Break Complete"
+                      : "Pacana · Long Break Complete";
+
+                const notifBody =
+                  completedPhase === "focus"
+                    ? "Focus session complete. Take a little breath whenever you're ready."
+                    : "Break complete. Open Pacana whenever you're ready to focus.";
+
+                void alertUser(s.settings, notifTitle, notifBody, {
                   forceSound: true,
                 }).then((soundPlayed) => {
                   if (live && !soundPlayed) {
@@ -442,6 +475,172 @@ export default function Pacana() {
       window.removeEventListener("offline", connection);
     };
   }, []);
+
+  const syncedDesktopSettingsRef = useRef(false);
+  useEffect(() => {
+    if (
+      state &&
+      !syncedDesktopSettingsRef.current &&
+      typeof window !== "undefined" &&
+      (window as any).pacanaDesktop?.setMinimizeToTray
+    ) {
+      syncedDesktopSettingsRef.current = true;
+      void (window as any).pacanaDesktop.setMinimizeToTray(
+        Boolean(state.settings.minimizeToTray),
+      );
+    }
+  }, [state]);
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      !(window as any).pacanaDesktop?.onMinimizeToTrayChange
+    ) {
+      return;
+    }
+    const cleanup = (window as any).pacanaDesktop.onMinimizeToTrayChange(
+      (enabled: boolean) => {
+        void update((s) => {
+          if (s.settings.minimizeToTray !== enabled) {
+            s.settings.minimizeToTray = enabled;
+          }
+        });
+      },
+    );
+    return () => {
+      if (typeof cleanup === "function") cleanup();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      !(window as any).pacanaDesktop?.onTimerCommand
+    ) {
+      return;
+    }
+    const cleanup = (window as any).pacanaDesktop.onTimerCommand(
+      (command: string) => {
+        void update((s) => {
+          const currentTime = Date.now();
+          if (command === "pause") {
+            if (s.timer?.status === "running") {
+              pause(s, currentTime);
+              const rem = remaining(s, currentTime);
+              (window as any).pacanaDesktop?.showNotification?.({
+                title: "Pacana · Session Paused",
+                body: `Timer paused with ${countdown(rem)} remaining.`,
+              });
+            }
+          } else if (command === "resume") {
+            if (s.timer?.status === "paused") {
+              resume(s, currentTime);
+              const rem = remaining(s, currentTime);
+              const pName = phaseName[s.timer.phase] || "Focus";
+              (window as any).pacanaDesktop?.showNotification?.({
+                title: "Pacana · Session Resumed",
+                body: `${pName} session resumed (${countdown(rem)} remaining).`,
+              });
+            }
+          } else if (command === "start-focus") {
+            if (!s.timer || s.timer.status === "complete") {
+              startPhase(s, currentTime, "focus", task, category);
+              const mins = s.settings.focus;
+              (window as any).pacanaDesktop?.showNotification?.({
+                title: "Pacana · Focus Started",
+                body: `Focus timer started for ${mins} minutes. Let's do this!`,
+              });
+            }
+          } else if (command === "next") {
+            const next = nextPhase(s);
+            const taskToUse = s.timer?.task || task;
+            const catToUse = s.timer?.category || category;
+            if (s.timer && s.timer.status !== "complete") {
+              end(s, currentTime);
+            }
+            startPhase(s, currentTime, next, taskToUse, catToUse);
+            const nextName = phaseName[next] || "Next";
+            const durationMins = s.settings[next];
+            (window as any).pacanaDesktop?.showNotification?.({
+              title: `Pacana · ${nextName} Started`,
+              body: `${nextName} session started for ${durationMins} minutes.`,
+            });
+          } else if (command === "end") {
+            if (s.timer && s.timer.status !== "complete") {
+              end(s, currentTime);
+              (window as any).pacanaDesktop?.showNotification?.({
+                title: "Pacana · Session Ended",
+                body: "Current session has been ended.",
+              });
+            }
+          }
+        });
+      },
+    );
+    return () => {
+      if (typeof cleanup === "function") cleanup();
+    };
+  }, [task, category]);
+
+  const lastTrayPayloadRef = useRef<{ tooltip: string; trayState: string }>({
+    tooltip: "",
+    trayState: "",
+  });
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      !(window as any).pacanaDesktop?.updateTimerStatus
+    ) {
+      return;
+    }
+
+    let trayState: "idle" | "focus" | "break" | "paused" = "idle";
+    let tooltip = "Pacana — Ready";
+
+    if (state?.timer) {
+      const rem = remaining(state, now);
+      const timeStr = countdown(rem);
+      if (state.timer.status === "running") {
+        if (state.timer.phase === "focus") {
+          trayState = "focus";
+          tooltip = `Pacana — Focus ${timeStr}`;
+        } else if (state.timer.phase === "short") {
+          trayState = "break";
+          tooltip = `Pacana — Short Break ${timeStr}`;
+        } else if (state.timer.phase === "long") {
+          trayState = "break";
+          tooltip = `Pacana — Long Break ${timeStr}`;
+        }
+      } else if (state.timer.status === "paused") {
+        trayState = "paused";
+        tooltip = `Pacana — Paused ${timeStr}`;
+      } else if (state.timer.status === "complete") {
+        trayState = "idle";
+        const phaseLabel =
+          state.timer.phase === "focus"
+            ? "Focus"
+            : state.timer.phase === "short"
+              ? "Short Break"
+              : "Long Break";
+        tooltip = `Pacana — ${phaseLabel} Complete`;
+      }
+    }
+
+    if (
+      lastTrayPayloadRef.current.tooltip !== tooltip ||
+      lastTrayPayloadRef.current.trayState !== trayState
+    ) {
+      lastTrayPayloadRef.current = { tooltip, trayState };
+      (window as any).pacanaDesktop.updateTimerStatus({
+        tooltip,
+        trayState,
+        phase: state?.timer?.phase,
+        status: state?.timer?.status,
+      });
+    }
+  }, [state?.timer, now]);
+
   useEffect(() => {
     if (
       typeof window !== "undefined" &&
@@ -2236,6 +2435,29 @@ function Preferences({
             guaranteed.
           </p>
         </section>
+        {typeof window !== "undefined" &&
+          Boolean((window as any).pacanaDesktop) && (
+            <section className="card settings-card">
+              <h2>Desktop / Application Behavior</h2>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  checked={state.settings.minimizeToTray ?? false}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    void update((s) => {
+                      s.settings.minimizeToTray = checked;
+                    });
+                    void (window as any).pacanaDesktop?.setMinimizeToTray(checked);
+                  }}
+                />{" "}
+                Minimize to system tray when closing
+              </label>
+              <p className="muted">
+                Keep Pacana running in the background when the window is closed.
+              </p>
+            </section>
+          )}
         <section className="card settings-card">
           <h2>Your timezone</h2>
           <form

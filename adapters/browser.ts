@@ -194,7 +194,15 @@ export async function alertUser(
       // The caller shows an in-app fallback instead of failing the timer tick.
     }
   }
+  // Desktop native Windows toast notification (always available on desktop app, even when minimized to tray)
   if (
+    typeof window !== "undefined" &&
+    (window as any).pacanaDesktop?.showNotification
+  ) {
+    try {
+      (window as any).pacanaDesktop.showNotification({ title, body });
+    } catch {}
+  } else if (
     settings.notifications &&
     "Notification" in window &&
     Notification.permission === "granted"
@@ -206,7 +214,11 @@ export async function alertUser(
         icon: "/favicon.svg",
       });
       n.onclick = () => {
-        window.focus();
+        if ((window as any).pacanaDesktop?.restoreWindow) {
+          void (window as any).pacanaDesktop.restoreWindow();
+        } else {
+          window.focus();
+        }
         n.close();
       };
     } catch {

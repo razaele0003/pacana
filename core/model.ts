@@ -23,6 +23,7 @@ export type Settings = {
   autoPromptCheckin?: boolean;
   notifications: boolean;
   onboarded: boolean;
+  minimizeToTray?: boolean;
 };
 export type Timer = {
   id: string;
@@ -117,6 +118,7 @@ export const defaults = (timezone = "Asia/Manila"): State => ({
     autoPromptCheckin: true,
     notifications: false,
     onboarded: false,
+    minimizeToTray: false,
   },
   timer: null,
   completedCycle: 0,
