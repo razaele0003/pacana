@@ -42,6 +42,16 @@ const outputs = await packager({
   overwrite: true,
   asar: true,
   prune: false,
+  appBundleId: "com.squirrel.pacana.Pacana",
+  appVersion: pkg.version || "0.1.4",
+  buildVersion: pkg.version || "0.1.4",
+  win32metadata: {
+    CompanyName: "razaele0003",
+    FileDescription: "Pacana — Cozy Focus & Time Journal",
+    OriginalFilename: "Pacana.exe",
+    ProductName: "Pacana",
+    InternalName: "Pacana",
+  },
   electronVersion: JSON.parse(
     await (
       await import("node:fs/promises")

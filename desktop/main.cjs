@@ -26,7 +26,13 @@ const smoke = process.argv.includes("--smoke");
 const testFullscreen = process.argv.includes("--test-fullscreen");
 const testTray = process.argv.includes("--test-tray");
 app.setName("Pacana");
-app.setAppUserModelId("com.pacana.desktop");
+if (process.platform === "win32") {
+  // Squirrel installer registers shortcuts with AUMID com.squirrel.pacana.Pacana.
+  // Matching this ID ensures Windows groups the running window with the Start Menu/Taskbar shortcut.
+  app.setAppUserModelId(app.isPackaged ? "com.squirrel.pacana.Pacana" : "com.pacana.desktop");
+} else {
+  app.setAppUserModelId("com.pacana.desktop");
+}
 app.setPath(
   "userData",
   path.join(
@@ -258,10 +264,13 @@ else {
 
       let updateTrayMenu = () => {};
 
-      const iconPath = path.join(__dirname, "icon.png");
+      const iconPath = process.platform === "win32"
+        ? path.join(__dirname, "icon.ico")
+        : path.join(__dirname, "icon.png");
+      const appIcon = nativeImage.createFromPath(iconPath);
       window = new BrowserWindow({
         title: "Pacana",
-        icon: iconPath,
+        icon: !appIcon.isEmpty() ? appIcon : iconPath,
         width: savedState.width || 1280,
         height: savedState.height || 900,
         x: savedState.x,
@@ -286,6 +295,12 @@ else {
           webSecurity: true,
         },
       });
+
+      if (!appIcon.isEmpty()) {
+        try {
+          window.setIcon(appIcon);
+        } catch {}
+      }
 
       // IPC Handlers for Audio Persistence and Window Controls
       ipcMain.handle("audio:save", async (_event, { name, data, type }) => {
@@ -452,6 +467,11 @@ else {
         }
       });
       window.once("ready-to-show", () => {
+        if (!appIcon.isEmpty()) {
+          try {
+            window.setIcon(appIcon);
+          } catch {}
+        }
         if (!smoke && !testFullscreen && savedState.isMaximized !== false) {
           window.maximize();
         }
